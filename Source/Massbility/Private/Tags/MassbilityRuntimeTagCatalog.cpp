@@ -76,6 +76,32 @@ bool FMassbilityCompiledRuntimeTagCatalog::BuildMask(const TArray<FGameplayTag>&
 	return BuildMaskInternal(Tags, OutMask, OutError);
 }
 
+void FMassbilityCompiledRuntimeTagCatalog::BuildMaskFiltered(const FGameplayTagContainer& Tags,
+	FMassbilityTagMask& OutMask) const
+{
+	OutMask.Reset();
+	if (!bCompiled)
+	{
+		return;
+	}
+	TArray<FGameplayTag> TagArray;
+	Tags.GetGameplayTagArray(TagArray);
+	for (const FGameplayTag Tag : TagArray)
+	{
+		if (!Tag.IsValid())
+		{
+			continue;
+		}
+		for (int32 Index = 0; Index < TagsByIndex.Num(); ++Index)
+		{
+			if (Tag.MatchesTag(TagsByIndex[Index]))
+			{
+				OutMask.Set(static_cast<uint16>(Index));
+			}
+		}
+	}
+}
+
 bool FMassbilityCompiledRuntimeTagCatalog::BuildMaskInternal(const TConstArrayView<FGameplayTag> Tags, FMassbilityTagMask& OutMask, FString& OutError) const
 {
 	OutMask.Reset();

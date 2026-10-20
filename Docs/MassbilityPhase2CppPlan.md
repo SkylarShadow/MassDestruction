@@ -6,6 +6,8 @@ Phase 2 在已完成的单位、Attribute Set、Schema、Runtime Tag 与基础 F
 
 本阶段仍不实现 Ability、空间目标选择、投射物、Skyra GAS Bridge、Gameplay Cue、网络同步或任意自定义 Execution UObject。所有逻辑保持在 Massbility Runtime 内。
 
+当前实现状态：Phase 2 第一轮运行时骨架已落地并通过 `PrjInitEditor Win64 Development` 编译。已包含效果注册、按 Schema 编译变体、请求队列、固定效果槽、持续/周期/叠层、Granted Tag 合并和统一属性访问。
+
 ## 2. 性能结论与约束
 
 Attribute Set 的组合只发生于 Schema 首次注册：多个 Set 被展平为一个固定 Slot 布局，并由 `SchemaId` 缓存。实体和 Processor 不保存、遍历或查询 Attribute Set，因此组合模型没有每帧性能成本。
@@ -62,7 +64,9 @@ struct FMassbilityAttributeHandle
 
 `Vital` 中的 Index 映射 Health、MaxHealth、MoveSpeed；`Extended` 中的 Index 指向 Schema 编译出的固定 Slot。编译效果时完成 `Attribute.* -> Handle` 的解析，执行效果时不再查询 Tag。
 
-Phase 2 第一版只支持可逆的 `Add` Modifier。持续效果移除时可准确反向扣除同一数值；Multiply、Override、复杂捕获属性和任意公式留给后续 Aggregator/Kernel 阶段。
+Phase 2 第一版只支持可逆的 `Add` Modifier。Ongoing Add 仅允许修改 MoveSpeed 与扩展属性，并采用不截断的可逆加法，移除时可准确恢复；Health、MaxHealth 仅允许 Instant/Periodic 路径。Multiply、Override、复杂捕获属性和任意公式留给后续 Aggregator/Kernel 阶段。
+
+效果模板先按 `EffectId` 编译与 Schema 无关的数据；第一次作用到某个 Schema 时，再生成 `(EffectId, SchemaId) -> VariantId`。Variant 中保存已经解析的 Attribute Handle，Active Effect Slot 只保存 VariantId，周期热路径不会查询 GameplayTag 或 TMap。
 
 ## 5. C++ 文件与职责
 

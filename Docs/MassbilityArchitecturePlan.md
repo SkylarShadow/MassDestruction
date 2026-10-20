@@ -173,14 +173,18 @@ Tag Container、Gameplay Effect、UObject、Blueprint 和 GAS 只能出现在资
 
 验收：玩家 GAS 武器可伤害 Mass 普通怪；Mass 普通怪攻击玩家时可通过 Skyra GE 正确扣血、触发消息和死亡事件。
 
-### Phase 5：Roguelike 与群体扩展
+### Phase 5：通用扩展与规模化运行时
 
-- 扩展冲锋、投射物、范围感染、击退、召唤和特殊怪能力。
-- 接入词条、等级、波次、掉落与经验归属。
-- 按距离 LOD 降低感知、目标、能力和效果更新频率。
-- 添加 ISM/Niagara/骨骼网格对象池表现同步。
+具体 C++ 拆分、数据协议、Processor 顺序和性能验收以《Massbility Phase 5：通用扩展与规模化运行时 C++ 落地方案》为准。该阶段保持项目中立，只依赖 Phase 4 已建立的原生 GAS 边界。
 
-验收：在目标规模下维持稳定帧时间，普通怪的逻辑、效果和表现均可按 LOD 降级。
+- 抽出可供 Ability 和其他 Mass 模块共用的 OutputId、请求队列和统一 Dispatcher。
+- 提供通用强制位移请求、优先级仲裁和可替换 Movement Adapter，不内建冲锋或击退玩法。
+- 为独立 Mass 投射物/范围查询系统提供 Output 与只读 Spatial 接缝，不在 Massbility 内实现投射物模拟。
+- 加固现有死亡事件的批量消费与实体销毁时序，不增加奖励、经验或掉落系统。
+- 按距离 LOD 降低 Targeting、Ability 和 Effect 的自主更新频率，同时保持命中、位移和死亡语义。
+- 预留只读表现同步协议，具体 ISM、Niagara 或骨骼池实现按项目需要放入独立模块。
+
+验收：外部 Mass 系统能够通过稳定公共接口复用 Mass/GAS 结算；强制位移通用且可适配；死亡事件可靠；逻辑可按 LOD 降频而不改变权威结果。
 
 ### Phase 6：验证与工具
 

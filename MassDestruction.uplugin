@@ -18,6 +18,10 @@
 		{
 			"Name": "MassGameplay",
 			"Enabled": true
+		},
+		{
+			"Name": "GameplayAbilities",
+			"Enabled": true
 		}
 	],
 	"Modules": [
@@ -30,6 +34,11 @@
 			"Name": "Massbility",
 			"Type": "Runtime",
 			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "MassbilityGAS",
+			"Type": "Runtime",
+			"LoadingPhase": "PostDefault"
 		}
 	]
 }

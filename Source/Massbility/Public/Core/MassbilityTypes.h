@@ -13,17 +13,50 @@ namespace Massbility
 	constexpr int32 MaxExtendedAttributes = 16; //最多 16 个扩展属性槽位，例如护甲魔抗之类
 	constexpr int32 RuntimeTagWordCount = 2; //使用两个 uint64
 	constexpr int32 MaxRuntimeTags = RuntimeTagWordCount * 64; // 最多支持多少个高频Tag
+	constexpr int32 MaxActiveEffects = 4; //每个 Mass 实体最多同时保存 4 种ge
+	constexpr int32 MaxEffectModifiers = 8; //一个效果最多包含 8 个 Modifier
+	constexpr int32 MaxAbilitiesPerUnit = 4;
+	constexpr int32 MaxAbilityOutputs = 4;
 }
+
+//属性保存位置
+UENUM(BlueprintType)
+enum class EMassbilityAttributeStorage : uint8
+{
+	Invalid, //未解析成功
+	Vital,
+	Extended, //Attribute Schema 编译出来的扩展属性
+};
+
+//TODO:也改为可配置？
+UENUM()
+enum class EMassbilityVitalAttribute : uint8
+{
+	Health,
+	MaxHealth,
+	MoveSpeed,
+};
+
+/*
+*
+* Attribute.Health
+  -> Storage = Vital
+  -> Index = Health
+
+Attribute.Armor
+  -> Storage = Extended
+  -> Index = 2
+ */
 
 USTRUCT()
 struct MASSBILITY_API FMassbilityAttributeHandle
 {
 	GENERATED_BODY()
 
-    uint16 Index = Massbility::InvalidId;//属性在编译后得到的槽位索引 例如 Attribute.Armor 对应 Idx2。
+	EMassbilityAttributeStorage Storage = EMassbilityAttributeStorage::Invalid;
+	uint8 Index = MAX_uint8;
 
-
-	bool IsValid() const { return Index != Massbility::InvalidId; }
+	bool IsValid() const { return Storage != EMassbilityAttributeStorage::Invalid && Index != MAX_uint8; }
 };
 
 UENUM(BlueprintType, meta = (Bitflags))

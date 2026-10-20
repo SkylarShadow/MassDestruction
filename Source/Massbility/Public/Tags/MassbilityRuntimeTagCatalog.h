@@ -15,6 +15,8 @@ struct MASSBILITY_API FMassbilityCompiledRuntimeTagCatalog
     //将设计期 Tag 转换为 FMassbilityTagMask
 	bool BuildMask(const FGameplayTagContainer& Tags, FMassbilityTagMask& OutMask, FString& OutError) const;
 	bool BuildMask(const TArray<FGameplayTag>& Tags, FMassbilityTagMask& OutMask, FString& OutError) const;
+	/** Projects only tags represented by this catalog; unknown tags are intentionally ignored. */
+	void BuildMaskFiltered(const FGameplayTagContainer& Tags, FMassbilityTagMask& OutMask) const;
 	bool IsCompiled() const { return bCompiled; }
 
 private:
