@@ -32,6 +32,19 @@ bool UMassAbilityDefinition::Validate(FString& OutError) const
 			OutError = TEXT("Effect output requires an Effect Definition.");
 			return false;
 		}
+		if (Output.SetByCallerValues.Num() > Massbility::MaxEffectSetByCallerValues)
+		{
+			OutError = FString::Printf(TEXT("An output supports at most %d SetByCaller values."), Massbility::MaxEffectSetByCallerValues);
+			return false;
+		}
+		for (const FMassEffectSetByCallerValue& Value : Output.SetByCallerValues)
+		{
+			if (!Value.DataTag.IsValid() || !FMath::IsFinite(Value.Value))
+			{
+				OutError = TEXT("Every output SetByCaller value needs a valid tag and finite value.");
+				return false;
+			}
+		}
 		if (Output.Type == EMassAbilityOutputType::Damage && (!FMath::IsFinite(Output.Damage) || Output.Damage <= 0.0f))
 		{
 			OutError = TEXT("Damage output requires a finite positive Damage value.");

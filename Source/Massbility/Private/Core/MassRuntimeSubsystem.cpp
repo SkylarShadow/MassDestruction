@@ -1,5 +1,7 @@
 // Copyright MassDestruction. All Rights Reserved.
 
+// Runtime 子系统管理实体创建、属性访问、状态和运行时 Tag。
+
 #include "Core/MassRuntimeSubsystem.h"
 
 #include "Core/MassRuntimeSettings.h"
@@ -13,7 +15,9 @@
 #include "MassEntitySubsystem.h"
 #include "Mass/EntityFragments.h"
 #include "Movement/MassForcedMovementFragments.h"
+#include "Targeting/MassUnitHitShapeFragment.h"
 
+// 初始化 Mass Entity、运行时 Tag、Schema 和其他能力系统依赖。
 void UMassRuntimeSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
@@ -32,6 +36,7 @@ void UMassRuntimeSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	SpatialCellSize = Settings ? FMath::Max(50.0f, Settings->SpatialCellSize) : 400.0f;
 }
 
+// 清理运行时注册表、缓存和实体管理依赖。
 void UMassRuntimeSubsystem::Deinitialize()
 {
 	UnitArchetype = {};
@@ -48,11 +53,13 @@ void UMassRuntimeSubsystem::Deinitialize()
 	Super::Deinitialize();
 }
 
+// 判断当前 World 是否支持运行时实体系统。
 bool UMassRuntimeSubsystem::DoesSupportWorldType(EWorldType::Type WorldType) const
 {
 	return WorldType == EWorldType::Game || WorldType == EWorldType::PIE || WorldType == EWorldType::GamePreview;
 }
 
+// 从上下文对象取得其所属 World 的 Runtime Subsystem。
 UMassRuntimeSubsystem* UMassRuntimeSubsystem::Get(const UObject* WorldContextObject)
 {
 	if (!GEngine || !WorldContextObject)
@@ -66,11 +73,14 @@ UMassRuntimeSubsystem* UMassRuntimeSubsystem::Get(const UObject* WorldContextObj
 	return nullptr;
 }
 
+// 使用单位定义创建默认 Transform 的 Mass 实体。
 FMassEntityHandle UMassRuntimeSubsystem::CreateUnit(const UMassUnitDefinition& UnitDefinition)
 {
+	// 使用单位定义创建实体，并初始化其 Fragment、属性和能力 Loadout。
 	return CreateUnit(UnitDefinition, FTransform::Identity);
 }
 
+// 使用指定 Transform 创建并初始化 Mass 单位实体。
 FMassEntityHandle UMassRuntimeSubsystem::CreateUnit(const UMassUnitDefinition& UnitDefinition, const FTransform& Transform)
 {
 	return CreateUnit(UnitDefinition, Transform, INDEX_NONE);
@@ -82,8 +92,15 @@ FMassEntityHandle UMassRuntimeSubsystem::CreateUnit(const UMassUnitDefinition& U
 	return FMassEntityFactory::Create(*this, UnitDefinition, Transform, TeamIdOverride);
 }
 
+FMassEntityHandle UMassRuntimeSubsystem::CreateUnitWithoutAbilities(
+	const UMassUnitDefinition& UnitDefinition, const FTransform& Transform)
+{
+	return FMassEntityFactory::Create(*this, UnitDefinition, Transform, INDEX_NONE, false);
+}
+
 bool UMassRuntimeSubsystem::DestroyUnit(const FMassEntityHandle Entity)
 {
+	// 销毁前确认实体有效，避免向 MassEntityManager 提交非法句柄。
 	if (!EntitySubsystem)
 	{
 		return false;
@@ -98,11 +115,13 @@ bool UMassRuntimeSubsystem::DestroyUnit(const FMassEntityHandle Entity)
 }
 
 // 先查固定 Vital 字段，再查 Unit Definition 对应 Schema 中的 Extended 字段。
+// 在属性 Schema 中按 Tag 查找属性句柄。
 bool UMassRuntimeSubsystem::ResolveAttributeHandle(const UMassAttributeSchema& Schema, const FGameplayTag AttributeTag, FMassAttributeHandle& OutHandle) const
 {
 	return FMassAttributeAccess::ResolveHandle(*this, Schema, AttributeTag, OutHandle);
 }
 
+// 根据 SchemaId 查找 Schema 后解析属性句柄。
 bool UMassRuntimeSubsystem::ResolveAttributeHandle(const uint16 SchemaId, const FGameplayTag AttributeTag, FMassAttributeHandle& OutHandle) const
 {
 	OutHandle = {};
@@ -137,16 +156,19 @@ bool UMassRuntimeSubsystem::ResolveAttributeHandle(const uint16 SchemaId, const 
 	return false;
 }
 
+// 读取实体固定属性数组中的一个属性值。
 bool UMassRuntimeSubsystem::GetAttribute(const FMassEntityHandle Entity, const FMassAttributeHandle Handle, float& OutValue) const
 {
 	return EntitySubsystem && FMassAttributeAccess::Get(*this, EntitySubsystem->GetEntityManager(), Entity, Handle, OutValue);
 }
 
+// 设置实体固定属性数组中的一个属性值。
 bool UMassRuntimeSubsystem::SetAttribute(const FMassEntityHandle Entity, const FMassAttributeHandle Handle, const float Value)
 {
 	return EntitySubsystem && FMassAttributeAccess::SetClamped(*this, EntitySubsystem->GetMutableEntityManager(), Entity, Handle, Value);
 }
 
+// 对实体固定属性执行增量修改。
 bool UMassRuntimeSubsystem::AddAttribute(const FMassEntityHandle Entity, const FMassAttributeHandle Handle, const float Delta)
 {
 	return EntitySubsystem && FMassAttributeAccess::Add(*this, EntitySubsystem->GetMutableEntityManager(), Entity, Handle, Delta);
@@ -183,6 +205,7 @@ bool UMassRuntimeSubsystem::AddExtendedAttribute(const FMassEntityHandle Entity,
 	return Handle.Storage == EMassAttributeStorage::Extended && AddAttribute(Entity, Handle, Delta);
 }
 
+// 设置实体状态标志，并同步影响状态 Tag 的运行时数据。
 bool UMassRuntimeSubsystem::SetStateFlags(const FMassEntityHandle Entity, const EMassStateFlags NewFlags)
 {
 	if (!EntitySubsystem)
@@ -212,8 +235,10 @@ bool UMassRuntimeSubsystem::SetStateFlags(const FMassEntityHandle Entity, const 
 	return true;
 }
 
+// 将基础 Tag、Effect Tag 和状态 Tag 合并成 RuntimeTags。
 bool UMassRuntimeSubsystem::RebuildRuntimeTags(const FMassEntityHandle Entity)
 {
+	// 根据基础 Tag、状态 Tag 和 Effect Tag 重建热路径使用的 RuntimeTags。
 	if (!EntitySubsystem)
 	{
 		return false;
@@ -233,11 +258,13 @@ bool UMassRuntimeSubsystem::RebuildRuntimeTags(const FMassEntityHandle Entity)
 	return true;
 }
 
+// 根据 SchemaId 查找编译后的属性 Schema。
 const FMassCompiledAttributeSchema* UMassRuntimeSubsystem::FindCompiledSchema(const uint16 SchemaId) const
 {
 	return CompiledSchemas.IsValidIndex(SchemaId) ? &CompiledSchemas[SchemaId] : nullptr;
 }
 
+// 判断实体是否满足必需 Tag 且不包含阻塞 Tag。
 bool UMassRuntimeSubsystem::HasRuntimeTags(const FMassEntityHandle Entity, const FMassTagMask& Required, const FMassTagMask& Blocked) const
 {
 	if (!EntitySubsystem)
@@ -249,6 +276,7 @@ bool UMassRuntimeSubsystem::HasRuntimeTags(const FMassEntityHandle Entity, const
 	return State && State->RuntimeTags.ContainsAll(Required) && !State->RuntimeTags.ContainsAny(Blocked);
 }
 
+// 编译运行时设置并建立全局 Tag、状态和属性索引。
 bool UMassRuntimeSubsystem::CompileSettings()
 {
 	const UMassRuntimeSettings* Settings = GetDefault<UMassRuntimeSettings>();
@@ -314,6 +342,7 @@ bool UMassRuntimeSubsystem::CompileSettings()
 	return true;
 }
 
+// 注册并缓存属性 Schema，返回运行时 SchemaId。
 bool UMassRuntimeSubsystem::RegisterSchema(const UMassAttributeSchema& Schema, uint16& OutSchemaId)
 {
 	if (const uint16* Existing = SchemaIds.Find(&Schema))
@@ -354,8 +383,10 @@ bool UMassRuntimeSubsystem::RegisterSchema(const UMassAttributeSchema& Schema, u
 	return true;
 }
 
+// 注册单位定义及其属性 Schema，返回实体初始化所需的紧凑 ID。
 bool UMassRuntimeSubsystem::RegisterUnitDefinition(const UMassUnitDefinition& UnitDefinition, uint16& OutUnitDefinitionId, uint16& OutSchemaId)
 {
+	// 注册单位定义、属性 Schema 和能力 Loadout，建立运行时紧凑 ID。
 	if (const uint16* Existing = UnitDefinitionIds.Find(&UnitDefinition))
 	{
 		OutUnitDefinitionId = *Existing;
@@ -380,6 +411,7 @@ bool UMassRuntimeSubsystem::RegisterUnitDefinition(const UMassUnitDefinition& Un
 	return true;
 }
 
+// 将状态枚举转换为运行时状态 Tag Mask。
 bool UMassRuntimeSubsystem::BuildStateMask(const EMassStateFlags Flags, FMassTagMask& OutMask) const
 {
 	OutMask.Reset();
@@ -394,6 +426,7 @@ bool UMassRuntimeSubsystem::BuildStateMask(const EMassStateFlags Flags, FMassTag
 	return true;
 }
 
+// 延迟创建并复用普通单位实体的 Archetype。
 FMassArchetypeHandle UMassRuntimeSubsystem::GetOrCreateUnitArchetype()
 {
 	if (!EntitySubsystem)
@@ -413,6 +446,7 @@ FMassArchetypeHandle UMassRuntimeSubsystem::GetOrCreateUnitArchetype()
 			FMassActiveEffectFragment::StaticStruct(),
 			FMassAbilityFragment::StaticStruct(),
 			FMassTargetFragment::StaticStruct(),
+			FMassUnitHitShapeFragment::StaticStruct(),
 			FMassForcedMovementFragment::StaticStruct(),
 			FTransformFragment::StaticStruct(),
 		};

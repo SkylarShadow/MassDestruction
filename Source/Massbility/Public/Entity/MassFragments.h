@@ -54,6 +54,8 @@ struct MASSBILITY_API FMassStateFragment : public FMassFragment
 	EMassStateFlags StateFlags = EMassStateFlags::Targetable;
 	FMassTagMask BaseTags;
 	FMassTagMask EffectTags;
+	/** 全部 Active Effect 汇总得到的 AbilityTag 阻止集合。 */
+	FMassTagMask EffectBlockedAbilityTags;
 	FMassTagMask RuntimeTags;
 };
 

@@ -1,5 +1,7 @@
 // Copyright MassDestruction. All Rights Reserved.
 
+// Forced Movement 子系统负责请求排队、适配器路由和失败统计。
+
 #include "Movement/MassForcedMovementSubsystem.h"
 
 #include "Core/MassRuntimeSettings.h"
@@ -13,6 +15,7 @@
 #include "MassExecutionContext.h"
 #include "Movement/MassForcedMovementFragments.h"
 
+// 初始化实体、运行时依赖和移动请求缓存。
 void UMassForcedMovementSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
@@ -23,6 +26,7 @@ void UMassForcedMovementSubsystem::Initialize(FSubsystemCollectionBase& Collecti
 	PendingRequests.Reserve(FMath::Min(MaxPendingRequests, 128));
 }
 
+// 清空移动请求和适配器注册表。
 void UMassForcedMovementSubsystem::Deinitialize()
 {
 	MovementAdapter = nullptr;
@@ -34,11 +38,13 @@ void UMassForcedMovementSubsystem::Deinitialize()
 	Super::Deinitialize();
 }
 
+// 判断当前 World 是否支持强制移动。
 bool UMassForcedMovementSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) const
 {
 	return WorldType == EWorldType::Game || WorldType == EWorldType::PIE || WorldType == EWorldType::GamePreview;
 }
 
+// 根据上下文对象取得对应 World 的移动子系统。
 UMassForcedMovementSubsystem* UMassForcedMovementSubsystem::Get(const UObject* WorldContextObject)
 {
 	if (!GEngine || !WorldContextObject)
@@ -54,6 +60,7 @@ UMassForcedMovementSubsystem* UMassForcedMovementSubsystem::Get(const UObject* W
 
 bool UMassForcedMovementSubsystem::QueueForcedMovement(const FMassForcedMovementRequest& Request)
 {
+	// 先验证请求参数，再延迟到 Processor 阶段修改实体或调用外部适配器。
 	if (!IsInGameThread() || !Request.Target.IsSet() || Request.Vector.ContainsNaN() || Request.DurationTicks == 0)
 	{
 		RecordFailure(EMassForcedMovementFailure::InvalidRequest);
@@ -102,6 +109,7 @@ bool UMassForcedMovementSubsystem::CancelForcedMovement(const FMassEntityHandle 
 
 bool UMassForcedMovementSubsystem::RegisterMovementAdapter(IMassMovementAdapter& Adapter)
 {
+	// 注册外部移动实现；同一适配器不能重复注册。
 	if (MovementAdapter && MovementAdapter != &Adapter)
 	{
 		return false;
@@ -110,8 +118,10 @@ bool UMassForcedMovementSubsystem::RegisterMovementAdapter(IMassMovementAdapter&
 	return true;
 }
 
+// 注销移动适配器并停止后续请求路由到该适配器。
 bool UMassForcedMovementSubsystem::UnregisterMovementAdapter(const IMassMovementAdapter& Adapter)
 {
+	// 移除适配器，后续匹配到该类型的请求将进入失败统计。
 	if (MovementAdapter != &Adapter)
 	{
 		return false;
@@ -289,6 +299,7 @@ bool UMassForcedMovementSubsystem::TickEntity(const FMassEntityHandle Entity, co
 	return true;
 }
 
+// 记录移动请求失败类型，便于定位适配器或参数问题。
 void UMassForcedMovementSubsystem::RecordFailure(const EMassForcedMovementFailure Failure)
 {
 	const uint8 Index = static_cast<uint8>(Failure);

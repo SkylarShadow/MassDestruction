@@ -1,5 +1,7 @@
 // Copyright MassDestruction. All Rights Reserved.
 
+// Spawn 子系统负责请求校验、批量消费、工厂调用和失败统计。
+
 #include "Spawn/MassSpawnSubsystem.h"
 
 #include "Core/MassRuntimeSettings.h"
@@ -7,6 +9,7 @@
 #include "Engine/Engine.h"
 #include "Entity/MassUnitDefinition.h"
 
+// 初始化生成依赖和请求队列容量。
 void UMassSpawnSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
@@ -18,6 +21,7 @@ void UMassSpawnSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	CompletedResults.Reserve(FMath::Min(MaxSpawnsPerTick, 256));
 }
 
+// 清空未消费的生成请求和统计数据。
 void UMassSpawnSubsystem::Deinitialize()
 {
 	PendingRequests.Reset();
@@ -28,11 +32,13 @@ void UMassSpawnSubsystem::Deinitialize()
 	Super::Deinitialize();
 }
 
+// 判断当前 World 是否支持 Mass Spawn。
 bool UMassSpawnSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) const
 {
 	return WorldType == EWorldType::Game || WorldType == EWorldType::PIE || WorldType == EWorldType::GamePreview;
 }
 
+// 根据上下文对象取得对应 World 的 Spawn Subsystem。
 UMassSpawnSubsystem* UMassSpawnSubsystem::Get(const UObject* WorldContextObject)
 {
 	if (!GEngine || !WorldContextObject)
@@ -48,11 +54,13 @@ UMassSpawnSubsystem* UMassSpawnSubsystem::Get(const UObject* WorldContextObject)
 
 bool UMassSpawnSubsystem::QueueSpawn(const FMassSpawnRequest& Request)
 {
+	// 校验单个生成请求后入队，不在调用方立即创建实体。
 	return QueueSpawns(MakeArrayView(&Request, 1));
 }
 
 bool UMassSpawnSubsystem::QueueSpawns(const TConstArrayView<FMassSpawnRequest> Requests)
 {
+	// 批量入队接口；任一请求非法时拒绝整批，保持调用方可预测。
 	if (!IsInGameThread())
 	{
 		RecordFailure(EMassSpawnFailure::WrongThread, FMath::Max(1, Requests.Num()));
@@ -92,6 +100,7 @@ bool UMassSpawnSubsystem::QueueSpawns(const TConstArrayView<FMassSpawnRequest> R
 
 void UMassSpawnSubsystem::FlushRequests(const uint32 CurrentTick)
 {
+	// 消费本 Tick 请求并通过 Entity Factory 创建实体。
 	CompletedResults.Reset();
 	if (!MassSubsystem)
 	{
@@ -135,6 +144,7 @@ void UMassSpawnSubsystem::FlushRequests(const uint32 CurrentTick)
 	CompactConsumedRequests();
 }
 
+// 累加指定生成失败原因的统计数量。
 void UMassSpawnSubsystem::RecordFailure(const EMassSpawnFailure Failure, const uint64 Count)
 {
 	const uint8 Index = static_cast<uint8>(Failure);
@@ -145,6 +155,7 @@ void UMassSpawnSubsystem::RecordFailure(const EMassSpawnFailure Failure, const u
 	}
 }
 
+// 移除已经消费的请求，压缩队列以便后续继续使用。
 void UMassSpawnSubsystem::CompactConsumedRequests()
 {
 	if (PendingRequestHead == PendingRequests.Num())

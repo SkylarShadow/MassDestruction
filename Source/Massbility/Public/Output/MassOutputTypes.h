@@ -51,6 +51,10 @@ struct MASSBILITY_API FMassAbilityOutputDefinition
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Massbility|Output")
 	float MagnitudeScale = 1.0f;
 
+	/** Effect 输出施加时携带的固定 SetByCaller 参数。动态参数由后续的 Output Spec 提供。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Massbility|Output", meta = (EditCondition = "Type == EMassAbilityOutputType::Effect", EditConditionHides))
+	TArray<FMassEffectSetByCallerValue> SetByCallerValues;
+
 	/** Stable cross-runtime identity. Effect outputs may default to the EffectTag during compilation. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Massbility|Output")
 	FGameplayTag SemanticTag;
@@ -76,6 +80,8 @@ struct MASSBILITY_API FMassOutputRegistration
 	FMassTagMask BlockedTargetTags;
 	float Damage = 0.0f;
 	float MagnitudeScale = 1.0f;
+	uint8 SetByCallerCount = 0;
+	TStaticArray<FMassEffectSetByCallerValue, Massbility::MaxEffectSetByCallerValues> SetByCallerValues;
 	EMassOutputRelationPolicy RelationPolicy = EMassOutputRelationPolicy::Any;
 	bool bRequireTargetable = true;
 	bool bAllowDeadTarget = false;
@@ -107,6 +113,9 @@ struct MASSBILITY_API FMassExternalOutputRequest
 	FMassExternalTargetHandle Target;
 	FMassOutputId OutputId;
 	float MagnitudeScale = 1.0f;
+	/** 输出编译时携带的固定参数；GAS Bridge 按映射选择并写入目标 GameplayEffectSpec。 */
+	uint8 SetByCallerCount = 0;
+	TStaticArray<FMassEffectSetByCallerValue, Massbility::MaxEffectSetByCallerValues> SetByCallerValues;
 	FVector Origin = FVector::ZeroVector;
 	FVector Direction = FVector::ZeroVector;
 	uint32 SimulationTick = 0;

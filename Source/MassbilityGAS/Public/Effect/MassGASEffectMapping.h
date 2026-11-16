@@ -34,6 +34,13 @@ struct MASSBILITYGAS_API FMassGASOutboundEffectMapping
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Massbility|GAS")
 	FGameplayTag MagnitudeSetByCallerTag;
 
+	/**
+	 * 从 Mass 输出读取的具名参数。为空时沿用旧行为，将伤害或输出倍率写入
+	 * MagnitudeSetByCallerTag；填写后可使 Mass 与 GAS 两侧使用不同的参数 Tag。
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Massbility|GAS")
+	FGameplayTag SourceMassSetByCallerTag;
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Massbility|GAS", meta = (ClampMin = "0.0"))
 	float GameplayEffectLevel = 1.0f;
 };
@@ -54,6 +61,13 @@ struct MASSBILITYGAS_API FMassGASInboundEffectMapping
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Massbility|GAS")
 	FGameplayTag MagnitudeSetByCallerTag;
+
+	/**
+	 * 将 GAS Spec 中由 MagnitudeSetByCallerTag 读取到的数值写入 Mass Effect Spec 的参数名。
+	 * 为空时沿用旧行为，把数值作为 MassEffectSpec::MagnitudeScale。
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Massbility|GAS")
+	FGameplayTag TargetMassSetByCallerTag;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Massbility|GAS")
 	float DefaultMagnitude = 1.0f;

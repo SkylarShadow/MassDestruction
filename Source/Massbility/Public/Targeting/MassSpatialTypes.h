@@ -12,6 +12,8 @@ struct MASSBILITY_API FMassSpatialEntry
 	FMassEntityHandle Entity;
 	// 使用 2D 平面位置；Z 轴不参与当前目标距离计算。
 	FVector Location = FVector::ZeroVector;
+	float HitRadius = 0.0f;
+	float HitHalfHeight = 0.0f;
 	// 查询阶段用它做 Required/Blocked Tag 过滤，避免访问实体 Fragment。
 	FMassTagMask RuntimeTags;
 	int32 NextEntry = INDEX_NONE;
@@ -34,4 +36,13 @@ struct MASSBILITY_API FMassSpatialStats
 	uint32 ActiveBuckets = 0;
 	uint64 Queries = 0;
 	uint64 CandidatesTested = 0;
+};
+
+/** First contact along a 3D segment; Time is normalized to [0, 1]. */
+struct MASSBILITY_API FMassSpatialHit
+{
+	FMassEntityHandle Entity;
+	FVector ImpactPoint = FVector::ZeroVector;
+	FVector ImpactNormal = FVector::ZeroVector;
+	float Time = 1.0f;
 };

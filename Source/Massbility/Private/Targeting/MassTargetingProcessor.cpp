@@ -1,5 +1,7 @@
 // Copyright MassDestruction. All Rights Reserved.
 
+// Targeting Processor 构建空间索引，并为实体缓存当前目标。
+
 #include "Targeting/MassTargetingProcessor.h"
 
 #include "Ability/MassAbilitySubsystem.h"
@@ -8,6 +10,7 @@
 #include "Mass/EntityFragments.h"
 #include "MassExecutionContext.h"
 #include "Targeting/MassSpatialSubsystem.h"
+#include "Targeting/MassUnitHitShapeFragment.h"
 
 UMassSpatialBuildProcessor::UMassSpatialBuildProcessor()
 	: SourceQuery(*this)
@@ -29,10 +32,12 @@ void UMassSpatialBuildProcessor::ConfigureQueries(const TSharedRef<FMassEntityMa
 	SourceQuery.AddRequirement<FMassUnitFragment>(EMassFragmentAccess::ReadOnly);
 	SourceQuery.AddRequirement<FMassStateFragment>(EMassFragmentAccess::ReadOnly);
 	SourceQuery.AddRequirement<FTransformFragment>(EMassFragmentAccess::ReadOnly);
+	SourceQuery.AddRequirement<FMassUnitHitShapeFragment>(EMassFragmentAccess::ReadOnly);
 }
 
 void UMassSpatialBuildProcessor::Execute(FMassEntityManager& EntityManager, FMassExecutionContext& Context)
 {
+	// 遍历可定位实体，把位置和筛选信息写入空间索引。
 	// 先把本轮可选目标建立成只读空间快照，后续 Targeting Processor 才能稳定查询。
 	UWorld* World = Context.GetWorld();
 	UMassRuntimeSubsystem* CoreSubsystem = World ? World->GetSubsystem<UMassRuntimeSubsystem>() : nullptr;
@@ -41,19 +46,13 @@ void UMassSpatialBuildProcessor::Execute(FMassEntityManager& EntityManager, FMas
 	{
 		return;
 	}
-	const uint32 CurrentTick = CoreSubsystem->GetSimulationClock().GetCurrentTick();
-	if (LastBuildTick != MAX_uint32
-		&& static_cast<uint32>(CurrentTick - LastBuildTick) < CoreSubsystem->GetTargetRefreshTicks())
-	{
-		return;
-	}
-	LastBuildTick = CurrentTick;
 	SpatialSubsystem->BeginBuild(CoreSubsystem->GetSpatialCellSize());
 	SourceQuery.ForEachEntityChunk(Context, [SpatialSubsystem](FMassExecutionContext& ChunkContext)
 	{
 		const TConstArrayView<FMassUnitFragment> Units = ChunkContext.GetFragmentView<FMassUnitFragment>();
 		const TConstArrayView<FMassStateFragment> States = ChunkContext.GetFragmentView<FMassStateFragment>();
 		const TConstArrayView<FTransformFragment> Transforms = ChunkContext.GetFragmentView<FTransformFragment>();
+		const TConstArrayView<FMassUnitHitShapeFragment> Shapes = ChunkContext.GetFragmentView<FMassUnitHitShapeFragment>();
 		for (FMassExecutionContext::FEntityIterator It = ChunkContext.CreateEntityIterator(); It; ++It)
 		{
 			// 不可选中、正在死亡或已死亡的实体不进入索引，减少查询候选并避免命中无效目标。
@@ -63,7 +62,8 @@ void UMassSpatialBuildProcessor::Execute(FMassEntityManager& EntityManager, FMas
 				continue;
 			}
 			SpatialSubsystem->Add(ChunkContext.GetEntity(It), Transforms[It].GetTransform().GetLocation(),
-				Units[It].TeamId, States[It].RuntimeTags);
+				Units[It].TeamId, States[It].RuntimeTags,
+				Shapes[It].bEnabled ? Shapes[It].Radius : 0.0f, Shapes[It].HalfHeight);
 		}
 	});
 }
@@ -95,6 +95,7 @@ void UMassTargetingProcessor::ConfigureQueries(const TSharedRef<FMassEntityManag
 
 void UMassTargetingProcessor::Execute(FMassEntityManager& EntityManager, FMassExecutionContext& Context)
 {
+	// 查询附近候选目标，按距离、队伍和 Tag 规则选择并缓存目标。
 	// Targeting 只负责周期性更新当前目标，不负责激活能力或造成伤害。
 	UWorld* World = Context.GetWorld();
 	UMassRuntimeSubsystem* CoreSubsystem = World ? World->GetSubsystem<UMassRuntimeSubsystem>() : nullptr;

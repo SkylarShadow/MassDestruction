@@ -39,6 +39,8 @@ struct MASSBILITY_API FMassCompiledAbility
 	FMassAbilityId AbilityId;
 	/** 用于调试、查找和外部映射的能力 GameplayTag。 */
 	FGameplayTag AbilityTag;
+	/** 该能力所属类别；包含 AbilityTag 本身，供 Effect 的 BlockedAbilityTags 匹配。 */
+	FMassTagMask AbilityTags;
 	/** 冷却持续的模拟 Tick 数。 */
 	uint32 CooldownTicks = 0;
 	/** 激活者必须具备的运行时 Tag。 */
@@ -98,6 +100,7 @@ enum class EMassAbilityFailure : uint8
 	InvalidSource,    // Source Handle 无效或实体不存在。
 	InvalidAbility,  // 能力槽位、AbilityId 或编译数据无效。
 	BlockedState,    // 拥有者当前状态禁止能力激活。
+	BlockedAbilityTags, // 实体上活动 Effect 阻止了该能力的 AbilityTags。
 	Cooldown,        // 能力仍处于冷却中。
 	OwnerTags,       // 拥有者不满足 Required/Blocked Owner Tags。
 	InvalidTarget,   // 目标 Handle 无效或目标不可用。

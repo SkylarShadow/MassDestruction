@@ -1,5 +1,7 @@
 // Copyright MassDestruction. All Rights Reserved.
 
+// Entity Factory 将 Unit Definition 转换为 Mass Entity 初始化数据。
+
 #include "Entity/MassEntityFactory.h"
 
 #include "Ability/MassAbilitySubsystem.h"
@@ -11,20 +13,23 @@
 #include "MassEntitySubsystem.h"
 #include "MassEntityView.h"
 #include "Mass/EntityFragments.h"
+#include "Targeting/MassUnitHitShapeFragment.h"
 
 FMassEntityHandle FMassEntityFactory::Create(UMassRuntimeSubsystem& Subsystem,
-	const UMassUnitDefinition& UnitDefinition, const FTransform& Transform, const int16 TeamIdOverride)
+	const UMassUnitDefinition& UnitDefinition, const FTransform& Transform, const int16 TeamIdOverride,
+	const bool bGrantAbilities)
 {
+	// 先注册单位相关运行时数据，再创建实体并初始化所有基础 Fragment。
 	uint16 UnitDefinitionId = Massbility::InvalidId;
 	uint16 SchemaId = Massbility::InvalidId;
 	if (!Subsystem.RegisterUnitDefinition(UnitDefinition, UnitDefinitionId, SchemaId) || !Subsystem.EntitySubsystem)
 	{
 		return {};
 	}
-	UMassAbilitySubsystem* AbilitySubsystem = Subsystem.GetWorld()
-		? Subsystem.GetWorld()->GetSubsystem<UMassAbilitySubsystem>() : nullptr;
 	uint16 AbilityLoadoutId = Massbility::InvalidId;
-	if (!AbilitySubsystem || !AbilitySubsystem->RegisterLoadout(UnitDefinition, AbilityLoadoutId))
+	UMassAbilitySubsystem* AbilitySubsystem = bGrantAbilities && Subsystem.GetWorld()
+		? Subsystem.GetWorld()->GetSubsystem<UMassAbilitySubsystem>() : nullptr;
+	if (bGrantAbilities && (!AbilitySubsystem || !AbilitySubsystem->RegisterLoadout(UnitDefinition, AbilityLoadoutId)))
 	{
 		UE_LOG(LogMassbility, Error, TEXT("Could not compile the ability loadout for '%s'."), *UnitDefinition.GetPathName());
 		return {};
@@ -39,6 +44,7 @@ FMassEntityHandle FMassEntityFactory::Create(UMassRuntimeSubsystem& Subsystem,
 	}
 
 	FMassEntityManager& EntityManager = Subsystem.EntitySubsystem->GetMutableEntityManager();
+	// Archetype 决定实体拥有的 Fragment；创建失败时不继续写入实体数据。
 	const FMassArchetypeHandle Archetype = Subsystem.GetOrCreateUnitArchetype();
 	if (!Archetype.IsValid())
 	{
@@ -54,6 +60,7 @@ FMassEntityHandle FMassEntityFactory::Create(UMassRuntimeSubsystem& Subsystem,
 
 	{
 		FMassEntityView EntityView(EntityManager, Entity);
+		// 将 Definition 的初始属性、状态、能力、目标刷新时间和碰撞形状复制到实体。
 		FMassUnitFragment& Unit = EntityView.GetFragmentData<FMassUnitFragment>();
 		Unit.UnitDefinitionId = UnitDefinitionId;
 		Unit.AttributeSchemaId = SchemaId;
@@ -90,9 +97,14 @@ FMassEntityHandle FMassEntityFactory::Create(UMassRuntimeSubsystem& Subsystem,
 			Subsystem.GetSimulationClock().GetCurrentTick()
 			+ static_cast<uint32>(Entity.Index) % Subsystem.GetTargetRefreshTicks();
 		EntityView.GetFragmentData<FTransformFragment>().SetTransform(Transform);
+		FMassUnitHitShapeFragment& HitShape = EntityView.GetFragmentData<FMassUnitHitShapeFragment>();
+		HitShape.Radius = FMath::Max(0.0f, UnitDefinition.GetHitRadius());
+		HitShape.HalfHeight = FMath::Max(HitShape.Radius, UnitDefinition.GetHitHalfHeight());
+		HitShape.bEnabled = HitShape.Radius > 0.0f;
 	}
 
-	const FMassCompiledAbilityLoadout* Loadout = AbilitySubsystem->FindLoadout(AbilityLoadoutId);
+	const FMassCompiledAbilityLoadout* Loadout = AbilitySubsystem
+		? AbilitySubsystem->FindLoadout(AbilityLoadoutId) : nullptr;
 	if (Loadout && Loadout->AbilityCount > 0)
 	{
 		EntityManager.AddTagToEntity(Entity, FMassHasAbilitiesTag::StaticStruct());

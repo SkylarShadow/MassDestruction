@@ -38,6 +38,8 @@ struct MASSBILITY_API FMassExternalTargetSnapshot
 	FMassTagMask RuntimeTags;
 	int16 TeamId = 0;
 	bool bTargetable = true;
+	float HitRadius = 0.0f;
+	float HitHalfHeight = 0.0f;
 };
 
 struct MASSBILITY_API FMassExternalTargetStats

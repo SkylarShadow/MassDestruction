@@ -10,6 +10,7 @@ Phase 5 不实现具体项目玩法，而是在 Phase 1 至 Phase 4 的战斗闭
 
 - 把 Ability 的 Damage/Effect 输出抽成可被其他 Mass 系统复用的通用提交接口。
 - 提供与玩法名称无关的强制位移 Request、状态、优先级和移动适配边界。
+- 提供通用单位生成请求、预算队列和批量实体初始化；生成时机、位置采样和波次规则由业务层决定。
 - 允许独立的 Mass 投射物、范围查询或其他命中系统向 Massbility 提交输出，而不由 Massbility 管理它们的模拟。
 - 保留并加固现有死亡事件，明确生命周期和消费时序。
 - 为 Targeting、Ability 和 Effect 提供通用模拟 LOD/预算入口。
@@ -18,7 +19,7 @@ Phase 5 不实现具体项目玩法，而是在 Phase 1 至 Phase 4 的战斗闭
 
 ### 实现状态（2026-10-13）
 
-Phase 5A、5B 和 5D 的第一轮通用 C++ 主链已落地，并通过 `PrjInitEditor Win64 Development` 编译：
+Phase 5A、5B 和 5E 的第一轮通用 C++ 主链已落地，并通过 `PrjInitEditor Win64 Development` 编译：
 
 - 已新增独立 `FMassbilityOutputId`、Compiled Output Registry、批量请求队列和 `Massbility.OutputDispatch` Processor。
 - 现有即时 Ability 已迁移到 Output Request；不再直接调用 Combat/Effect，也不再以 `AbilityId + OutputIndex` 驱动 GAS Bridge。
@@ -28,11 +29,12 @@ Phase 5A、5B 和 5D 的第一轮通用 C++ 主链已落地，并通过 `PrjInit
 - 当前基础 Unit Archetype 包含固定强制位移 Fragment，但 Processor 只查询带 Active Tag 的实体，更新成本与活动位移数相关。
 - 已新增当前 Simulation Tick 的只读 Death Event Batch；兼容 `ConsumeDeathEvents` 不再清空共享事件。
 - 输出队列和强制位移队列已有容量、高水位和拒绝原因统计。
+- Phase 5D 已开始：通用 Spawn Request、FIFO 预算队列、结果快照和 `Massbility.Spawn` Processor 已落地；该增量仍需使用项目要求的 UE 5.8 环境编译验证。测试 Encounter Actor 与批量 Mass 创建优化仍待后续验证。
 
 尚未落地：
 
-- Phase 5E Simulation LOD/Observer 调度。
-- Phase 5F Representation Snapshot 测试协议。
+- Phase 5F Simulation LOD/Observer 调度。
+- Phase 5G Representation Snapshot 测试协议。
 - External GAS Target 的 Movement Adapter；当前会明确返回 Unsupported，不修改 Proxy 或 Avatar Transform。
 - 正式独立投射物模块；当前只提供它所需的公共 Output 提交接口。
 
@@ -43,7 +45,7 @@ Phase 5A、5B 和 5D 的第一轮通用 C++ 主链已落地，并通过 `PrjInit
 - 冲锋技能、感染技能、特殊怪技能等具体玩法。
 - 内建 Mass 投射物模拟、投射物移动、碰撞、穿透、追踪或弹跳。
 - 内建范围伤害实体或持续区域玩法。
-- 召唤物系统和召唤链归属。
+- 召唤物系统、召唤链归属和召唤玩法规则。
 - 等级、词条、单位变体和 Roguelike 成长。
 - 波次导演、刷怪规则和 Threat Budget。
 - 奖励事件、经验、掉落、背包、经济和拾取物聚合。
@@ -68,8 +70,9 @@ Phase 1 至 Phase 4 已具备：
 1. Ability Output 仍以 `AbilityId + OutputIndex` 为身份，独立模块无法自然复用。
 2. 没有统一的强制位移请求和所有权，Combat、Ability 或外部系统容易直接争写 Transform。
 3. 外部 Mass 模拟系统没有稳定的命中输出提交协议和 Processor 可见性约定。
-4. Death Event 虽已存在，但销毁时序、队列寿命和消费者约束需要固定。
-5. Targeting、Ability 和 Effect 尚无统一的 LOD/预算策略入口。
+4. 没有通用的预算化单位生成队列；业务层只能逐个调用创建 API，无法获得稳定的批量生成时序。
+5. Death Event 虽已存在，但销毁时序、队列寿命和消费者约束需要固定。
+6. Targeting、Ability 和 Effect 尚无统一的 LOD/预算策略入口。
 
 ## 4. 总体边界
 
@@ -102,6 +105,7 @@ Ability / Effect / External System
 - 外部系统负责“何时、何处、命中了谁”；Massbility 负责“该命中如何转成 Mass Effect/Damage 或原生 GAS 输出”。
 - 强制位移只表达运动意图；具体世界碰撞和最终 Transform 写入由移动适配层负责。
 - 死亡事件是通用战斗事实，不扩展为奖励或掉落事件。
+- Massbility 只接收已经决定好的 Unit Definition、Transform 和可选 Team Override；不决定何时生成、生成多少、从哪个出生点采样或何时停止。
 - LOD 只降低自主轮询频率，不能丢失已经提交的 Damage、Effect、Forced Movement 或 Death Event。
 
 ## 5. Phase 5A：独立 Output 身份与提交接口
@@ -419,9 +423,57 @@ External Projectile/Hit Producer
 
 当前队列 API 为 Game Thread only。并行 Projectile Processor 应先写入自己的 Chunk/Processor 本地缓冲，再在一个明确的 Game Thread 汇总阶段批量调用 `QueueOutputs`，不能从并行 Chunk 直接写 World Subsystem 的共享数组。
 
-## 8. Phase 5D：死亡事件加固
+## 8. Phase 5D：通用单位生成接缝
 
-### 8.1 保留现有事件
+### 8.1 范围
+
+`Massbility` 提供预算化的单位生成能力，供 MassSpawner Adapter、业务层波次系统、调试工具和测试关卡共用。它不提供 Encounter、波次、Threat、出生点、随机规则或存活数量限制。
+
+框架只处理业务层已经计算完成的单个生成意图：
+
+```cpp
+struct FMassbilitySpawnRequest
+{
+    UMassbilityUnitDefinition* UnitDefinition; // 调用方持有的已加载定义。
+    FTransform Transform;
+    int16 TeamIdOverride = INDEX_NONE;
+    uint32 RequestId = 0;       // 仅用于业务层关联完成结果，不解释语义。
+    uint32 QueuedSimulationTick = 0; // 框架写入；下一 Simulation Tick 才允许消费。
+};
+```
+
+- `UnitDefinition` 必须已经加载；稳定战斗阶段不允许用 Spawn API 同步加载软引用。当前工厂会缓存其编译结果，后续可增加显式预热 API。
+- `Transform` 由业务层、MassSpawner Generator 或测试代码提供；框架不包含 SpawnArea 或随机采样逻辑。
+- `TeamIdOverride` 是可选生成覆盖。未设置时沿用 Unit Definition 的 TeamId。
+- `RequestId` 是不透明关联值，框架不把它解释为波次、组、召唤者或奖励归属。
+
+### 8.2 队列、批处理与初始化
+
+- `UMassbilitySpawnSubsystem` 按 FIFO 消费请求，并受 `MaxSpawnsPerSimulationTick` 限制。
+- 当前请求严格 FIFO；连续相同 Definition 已复用工厂缓存和共享 Archetype。真正的批量 `CreateEntities` 优化必须在性能验证后加入，且结果顺序必须与请求顺序一致。
+- 请求在 Tick `T` 入队后最早于 `T + 1` 消费；已超过本 Tick 预算的请求保留到后续 Tick，不得丢弃、重排或使用世界时间重新计算请求语义。
+- `CreateUnit()` 与 SpawnSubsystem 均调用同一 `FMassbilityEntityFactory::Create` 路径，防止两条生成路径得到不同 Fragment、Tag、Health 或 Ability Loadout。
+- 生成完成后可发布只读 `FMassbilitySpawnResult`，返回 `RequestId`、Entity Handle 与拒绝原因；业务层据此维护自己的波次/存活计数。
+
+### 8.3 业务层与测试层职责
+
+```text
+业务 Encounter / Wave / SpawnPoint 逻辑
+  -> 决定时间、数量、位置、随机、上限与触发条件
+  -> 生成固定 Transform 列表
+  -> QueueSpawn / QueueSpawnBatch
+
+Massbility SpawnSubsystem
+  -> 检查已注册 Definition、容量和参数
+  -> 按 Tick 预算创建并初始化 Entity
+  -> 返回生成结果
+```
+
+`AMassbilityTestEncounterActor` 可以作为真实关卡集成测试工具，用固定时间和固定 Transform 提交请求；它不进入核心 Runtime 模块，也不定义正式项目的刷怪规则。
+
+## 9. Phase 5E：死亡事件加固
+
+### 9.1 保留现有事件
 
 继续使用已有事件：
 
@@ -437,7 +489,7 @@ struct FMassbilityDeathEvent
 
 Phase 5 不增加 RewardEvent、ExperienceValue、RewardTableId 或掉落信息。
 
-### 8.2 生命周期协议
+### 9.2 生命周期协议
 
 - 每个实体只产生一次 Death Event。
 - Death Event 在实体进入 Dead 状态后、实际销毁前入队。
@@ -447,7 +499,7 @@ Phase 5 不增加 RewardEvent、ExperienceValue、RewardTableId 或掉落信息�
 - Source 失效是合法状态；消费者必须处理 Invalid Source。
 - 周期效果和外部系统提交的 Output 必须继续保留正确 Source/EffectId。
 
-### 8.3 消费 API
+### 9.3 消费 API
 
 优先提供批量只读访问或 Drain-to-buffer API，不为每个 Death Event 广播动态 Delegate：
 
@@ -457,9 +509,9 @@ TConstArrayView<FMassbilityDeathEvent> GetDeathEventsForCurrentTick() const;
 
 若多个消费者需要不同生命周期，则由 Subsystem 使用双缓冲 Event Batch 和注册的 Processor 时序，而不是每个消费者移除队列元素。
 
-## 9. Phase 5E：通用模拟 LOD 与预算
+## 10. Phase 5F：通用模拟 LOD 与预算
 
-### 9.1 LOD 只控制自主更新
+### 10.1 LOD 只控制自主更新
 
 ```cpp
 UENUM()
@@ -486,13 +538,13 @@ enum class EMassbilitySimulationLOD : uint8
 - Death 判定和 Death Event。
 - External GAS Bridge 中已经入队的请求。
 
-### 9.2 Observer 与引擎 MassLOD
+### 10.2 Observer 与引擎 MassLOD
 
 Observer 通过通用注册 API 提供位置和权重，不依赖项目 Pawn 类。优先验证并复用引擎 `MassLOD` 的 Viewer/距离计算；若 Dedicated Server 或无表现 World 不适合该路径，则使用轻量 Observer Adapter。
 
 Massbility 的 Simulation LOD 与 Representation LOD 分离。前者决定战斗系统轮询频率，后者由表现模块决定可见形态。
 
-### 9.3 Effect 时间正确性
+### 10.3 Effect 时间正确性
 
 Active Effect 已使用绝对 Simulation Tick：
 
@@ -503,7 +555,7 @@ Active Effect 已使用绝对 Simulation Tick：
 
 首版仅实现统一的 `ShouldProcessThisTick(Entity, SystemKind)` 调度接口，不立即为每个系统设计独有 LOD 玩法。
 
-### 9.4 预算与延续
+### 10.4 预算与延续
 
 所有新增队列提供：
 
@@ -518,7 +570,7 @@ Deferred
 
 只有天然可延迟的自主轮询可以 Deferred。Damage、Effect、Death 和已经开始的 Forced Movement 不允许因预算静默丢失。
 
-## 10. Phase 5F：表现只读边界
+## 11. Phase 5G：表现只读边界
 
 本阶段只冻结最小协议，不实现 ISM、Niagara 或骨骼对象池：
 
@@ -541,9 +593,9 @@ struct FMassbilityRepresentationSnapshot
 - 具体表现模块可独立依赖 `MassRepresentation`、`MassActors`、Niagara 或 Renderer。
 - `Massbility` 核心不增加这些依赖。
 
-若当前项目暂不需要 Mass 表现适配，Phase 5F 可以只保留接口文档和测试桩，不创建新模块。
+若当前项目暂不需要 Mass 表现适配，Phase 5G 可以只保留接口文档和测试桩，不创建新模块。
 
-## 11. Processor 顺序
+## 12. Processor 顺序
 
 推荐核心顺序：
 
@@ -559,6 +611,7 @@ Massbility.SimulationLOD
   -> Massbility.EffectApply
   -> Massbility.EffectTick
   -> Massbility.Death
+  -> Massbility.Spawn
   -> External Death Consumers（可选）
   -> Massbility.RepresentationSnapshot（可选）
 ```
@@ -568,10 +621,11 @@ Massbility.SimulationLOD
 - Forced Movement 先提交最终 Transform，SpatialBuild 再建立本 Tick 查询快照。
 - 现有 Ability 和外部命中系统都只提交 Output Request。
 - Output Dispatcher 后，同 Tick 可以进入 EffectApply 和 Death。
+- Spawn 在 Death 后创建 Entity；新 Entity 从下一次 SpatialBuild 起参与目标查询和能力执行。
 - Death Consumer 只读取 Event Batch，不反向修改当前 Tick 的 Death Queue。
 - 外部 Processor 必须通过显式 `ExecuteBefore/ExecuteAfter` 接入。
 
-## 12. 模块与文件布局
+## 13. 模块与文件布局
 
 Phase 5 只需要在 `Massbility` 内增加通用目录：
 
@@ -585,6 +639,9 @@ Source/Massbility
 │   │   ├── MassbilityForcedMovementTypes.h
 │   │   ├── MassbilityForcedMovementFragments.h
 │   │   └── MassbilityMovementAdapter.h
+│   ├── Spawn
+│   │   ├── MassbilitySpawnTypes.h
+│   │   └── MassbilitySpawnSubsystem.h
 │   ├── LOD
 │   │   └── MassbilitySimulationLODTypes.h
 │   └── Representation
@@ -600,7 +657,6 @@ Source/Massbility
 ```text
 Projectile
 Area
-Spawn
 Progression
 Encounter
 Reward
@@ -609,7 +665,7 @@ Loot
 
 独立投射物模块只依赖 `Massbility` 的 Public Output/Spatial API；`Massbility` 不反向依赖该模块。
 
-## 13. 实施顺序
+## 14. 实施顺序
 
 ### Phase 5A：Output 接缝
 
@@ -641,7 +697,17 @@ Loot
 
 验收：未来独立投射物系统只依赖稳定公共协议，不要求修改 Massbility Combat/GAS Bridge。
 
-### Phase 5D：Death Event 加固
+### Phase 5D：通用生成
+
+1. 抽出 `CreateUnit()` 的共享初始化逻辑。
+2. 实现 `FMassbilitySpawnRequest`、固定容量队列和每 Tick 预算。
+3. 实现同 Definition 的批量创建与顺序稳定结果。
+4. 提供 RequestId 对应的只读结果与拒绝统计。
+5. 用仅属于项目测试层的 `AMassbilitySpawnTestDirector` 验证固定请求到 Mass Entity 的完整路径；该 Actor 可由测试脚本配置和调用，不承载正式 Encounter 规则。
+
+验收：业务层可在不依赖任何波次框架的前提下，提交固定 Transform 的批量生成请求；API 创建和队列创建的单位运行时状态一致。
+
+### Phase 5E：Death Event 加固
 
 1. 固定 Event Batch 生命周期。
 2. 增加批量只读消费 API。
@@ -650,7 +716,7 @@ Loot
 
 验收：死亡事实稳定、只发一次、来源尽可能保留；不存在奖励或掉落耦合。
 
-### Phase 5E：LOD 与预算
+### Phase 5F：LOD 与预算
 
 1. 增加 Simulation LOD/Observer 最小模型。
 2. 让 Targeting、Ability 和 Effect 调度使用统一频率入口。
@@ -660,7 +726,7 @@ Loot
 
 验收：远距离实体显著减少自主轮询，同时外部命中、位移、死亡和 GAS Bridge 不丢失。
 
-### Phase 5F：可选表现协议
+### Phase 5G：可选表现协议
 
 1. 冻结 Snapshot/Event Sequence。
 2. 提供测试消费者验证只读和旧事件拒绝。
@@ -668,7 +734,7 @@ Loot
 
 验收：核心不依赖任何具体渲染方案。
 
-## 14. 第一垂直切片
+## 15. 第一垂直切片
 
 第一刀不制作任何具体技能或投射物玩法，只验证通用边界：
 
@@ -694,7 +760,7 @@ Death
 
 该切片完成后，具体项目可以独立实现投射物、范围查询或玩法能力，而不要求 Massbility 增加相应的专有概念。
 
-## 15. 自动化测试
+## 16. 自动化测试
 
 - Ability 迁移到 OutputId 前后 Damage/Effect 结果一致。
 - 同一 OutputId 可由 Ability 和外部 Producer 提交。
@@ -702,6 +768,8 @@ Death
 - 无效 OutputId、Target、Source 和队列满都有稳定拒绝结果。
 - Source 失效但 Policy 允许时可以结算，Death Event Source 为 Invalid。
 - 多个强制位移请求按 Priority/Blend 确定性仲裁。
+- Spawn Request 在预算截断后保留顺序，并与 `CreateUnit()` 产生一致的初始 Fragment 数据。
+- 无效 Definition、队列满和 Team Override 都有稳定结果和统计。
 - Displacement、Velocity、ToLocation 三种 Mode 正确到期。
 - 死亡会取消活动强制位移。
 - 未注册 External Movement Adapter 时不会移动 GAS Avatar 或 Proxy。
@@ -710,7 +778,7 @@ Death
 - Death Event Consumer 不依赖 Victim 下一 Tick 仍有效。
 - LOD 降频不丢 Output、Forced Movement、Effect Tick 或 Death Event。
 
-## 16. 性能与统计
+## 17. 性能与统计
 
 新增统计：
 
@@ -726,6 +794,8 @@ DeathEventsProduced/Consumed
 EntitiesBySimulationLOD
 Targeting/Ability/EffectTicksSkippedByLOD
 QueueHighWaterMarks
+SpawnRequestsQueued/Created/Rejected/Deferred
+SpawnQueueHighWaterMark
 ```
 
 性能约束：
@@ -738,18 +808,19 @@ QueueHighWaterMarks
 - Forced Movement 每实体最多一个活动状态。
 - LOD 判断错峰执行，不能同帧扫描全部实体。
 
-## 17. 固定决策
+## 18. 固定决策
 
 - Phase 5 是通用框架扩展，不是 Roguelike 玩法实现阶段。
 - 只保留死亡事件，不增加奖励、经验或掉落事件。
 - 投射物默认属于独立 Mass 系统；Massbility 只提供 Output/Spatial 接缝。
+- 生成队列属于 Massbility 框架；Encounter、Wave、SpawnArea 和出生规则属于业务层或测试工具。
 - 强制位移不使用 Charge、Knockback 等玩法枚举。
 - Combat、Effect 和 Ability 不直接争写 Transform。
 - External GAS Actor 的强制位移必须经过显式 Adapter。
 - 不引入完整能力阶段状态机，直到出现明确的通用需求。
 - 不把 GameplayAbilities、MassRepresentation、Niagara 或项目模块加入 `Massbility` 核心依赖。
 
-## 18. Phase 5 完成标准
+## 19. Phase 5 完成标准
 
 Phase 5 完成意味着：
 

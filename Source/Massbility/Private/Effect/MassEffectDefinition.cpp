@@ -25,9 +25,9 @@ bool UMassEffectDefinition::Validate(FString& OutError) const
 		OutError = TEXT("DurationSeconds is only valid for the Duration policy.");
 		return false;
 	}
-	if (DurationPolicy == EMassEffectDurationPolicy::Instant && !GrantedTags.IsEmpty())
+	if (DurationPolicy == EMassEffectDurationPolicy::Instant && (!GrantedTags.IsEmpty() || !BlockedAbilityTags.IsEmpty()))
 	{
-		OutError = TEXT("Instant effects cannot grant persistent tags.");
+		OutError = TEXT("Instant effects cannot grant persistent tags or block abilities.");
 		return false;
 	}
 	if (StackLimit == 0)
@@ -46,6 +46,11 @@ bool UMassEffectDefinition::Validate(FString& OutError) const
 		if (!Modifier.AttributeTag.IsValid() || !FMath::IsFinite(Modifier.Magnitude))
 		{
 			OutError = TEXT("Every modifier needs a valid attribute tag and finite magnitude.");
+			return false;
+		}
+		if (Modifier.MagnitudeSource == EMassEffectMagnitudeSource::SetByCaller && !Modifier.SetByCallerTag.IsValid())
+		{
+			OutError = TEXT("A SetByCaller modifier requires a valid SetByCallerTag.");
 			return false;
 		}
 		if (DurationPolicy == EMassEffectDurationPolicy::Instant && Modifier.Timing != EMassModifierTiming::Instant)

@@ -39,6 +39,8 @@ public:
 	FMassEntityHandle CreateUnit(const UMassUnitDefinition& UnitDefinition, const FTransform& Transform);
 	/** TeamIdOverride 为 INDEX_NONE 时使用 UnitDefinition 的默认阵营。 */
 	FMassEntityHandle CreateUnit(const UMassUnitDefinition& UnitDefinition, const FTransform& Transform, int16 TeamIdOverride);
+	/** Spawn the same unit shape, vitals and tags without compiling or granting its ability loadout. */
+	FMassEntityHandle CreateUnitWithoutAbilities(const UMassUnitDefinition& UnitDefinition, const FTransform& Transform);
 	bool DestroyUnit(FMassEntityHandle Entity);
 
 	/** 将作者配置的 GameplayTag 解析为固定 Vital 或 Extended 存储中的属性句柄。 */

@@ -15,6 +15,7 @@ namespace Massbility
 	constexpr int32 MaxRuntimeTags = RuntimeTagWordCount * 64; // 最多支持多少个高频Tag
 	constexpr int32 MaxActiveEffects = 4; //每个 Mass 实体最多同时保存 4 种ge
 	constexpr int32 MaxEffectModifiers = 8; //一个效果最多包含 8 个 Modifier
+	constexpr int32 MaxEffectSetByCallerValues = 4; //单次 Effect Spec 最多携带 4 个动态数值
 	constexpr int32 MaxAbilitiesPerUnit = 4;
 	constexpr int32 MaxAbilityOutputs = 4;
 }

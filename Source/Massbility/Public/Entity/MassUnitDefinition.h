@@ -22,6 +22,8 @@ public:
 	float GetInitialHealth() const { return InitialHealth; }
 	float GetInitialMaxHealth() const { return InitialMaxHealth; }
 	float GetInitialMoveSpeed() const { return InitialMoveSpeed; }
+	float GetHitRadius() const { return HitRadius; }
+	float GetHitHalfHeight() const { return HitHalfHeight; }
 	int32 GetTeamId() const { return TeamId; }
 	const FGameplayTagContainer& GetInitialRuntimeTags() const { return InitialRuntimeTags; }
 	const TArray<TObjectPtr<UMassAbilityDefinition>>& GetAbilities() const { return Abilities; }
@@ -38,6 +40,13 @@ private:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Massbility|Unit", meta = (ClampMin = "0.0", AllowPrivateAccess = "true"))
 	float InitialMoveSpeed = 300.0f;
+
+	/** Upright capsule used by query-based weapon hits. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Massbility|Hit Shape", meta = (ClampMin = "0.0", AllowPrivateAccess = "true"))
+	float HitRadius = 34.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Massbility|Hit Shape", meta = (ClampMin = "0.0", AllowPrivateAccess = "true"))
+	float HitHalfHeight = 88.0f;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Massbility|Unit", meta = (AllowPrivateAccess = "true"))
 	int32 TeamId = 0;   //TODO: 要不要移出，或者单独分一个fragment

@@ -180,6 +180,7 @@ Tag Container、Gameplay Effect、UObject、Blueprint 和 GAS 只能出现在资
 - 抽出可供 Ability 和其他 Mass 模块共用的 OutputId、请求队列和统一 Dispatcher。
 - 提供通用强制位移请求、优先级仲裁和可替换 Movement Adapter，不内建冲锋或击退玩法。
 - 为独立 Mass 投射物/范围查询系统提供 Output 与只读 Spatial 接缝，不在 Massbility 内实现投射物模拟。
+- 提供通用 Spawn Request、预算队列、批量创建和统一 Fragment 初始化；何时、何地、生成多少单位由业务层或测试工具决定。
 - 加固现有死亡事件的批量消费与实体销毁时序，不增加奖励、经验或掉落系统。
 - 按距离 LOD 降低 Targeting、Ability 和 Effect 的自主更新频率，同时保持命中、位移和死亡语义。
 - 预留只读表现同步协议，具体 ISM、Niagara 或骨骼池实现按项目需要放入独立模块。

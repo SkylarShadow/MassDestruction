@@ -58,6 +58,7 @@ public:
 	bool SetAbilitySystemTargetable(FMassExternalTargetHandle Handle, bool bTargetable);
 	bool UnregisterAbilitySystemTarget(FMassExternalTargetHandle Handle);
 	UAbilitySystemComponent* ResolveAbilitySystem(FMassExternalTargetHandle Handle) const;
+	FMassEntityHandle ResolveProxyEntity(const UAbilitySystemComponent* AbilitySystem) const;
 
 	/** 将原生 GAS Spec 转换为排队的 Mass 伤害或效果请求。 */
 	bool ApplyGameplayEffectSpecToMassTarget(const FGameplayEffectSpec& Spec,

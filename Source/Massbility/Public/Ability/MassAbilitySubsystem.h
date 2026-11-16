@@ -44,12 +44,12 @@ public:
 private:
 	friend class UMassAbilityProcessor;
 
-	/** 把作者数据转换为 Tick、Tag Mask 和 OutputId 组成的热路径结构。 */
+	/** 把数据转换为 Tick、Tag Mask 和 OutputId 组成的热路径结构。 */
 	bool CompileAbility(const UMassAbilityDefinition& Definition, FMassCompiledAbility& OutAbility);
 	/** 按提交顺序消费能力请求，并记录每次激活结果。 */
 	void FlushRequests(FMassEntityManager& EntityManager, uint32 CurrentTick);
 	/** 执行一次完整的能力激活校验和输出提交。 */
-	EMassAbilityFailure TryActivate(FMassEntityManager& EntityManager, FMassEntityHandle Source,
+	EMassAbilityFailure TryActivate(FMassEntityManager& EntityManager, FMassEntityHandle TargetPolicySource,
 		uint8 AbilitySlot, FMassEntityHandle ExplicitTarget, float MagnitudeScale, uint32 CurrentTick);
 	/** 更新尝试、成功和分类失败统计。 */
 	void RecordResult(EMassAbilityFailure Failure);

@@ -1,5 +1,7 @@
 // Copyright MassDestruction. All Rights Reserved.
 
+// Output 子系统负责输出注册、校验、排队和按类型分发。
+
 #include "Output/MassOutputSubsystem.h"
 
 #include "Combat/MassCombatSubsystem.h"
@@ -14,6 +16,7 @@
 #include "MassEntitySubsystem.h"
 #include "Mass.h"
 
+// 初始化输出依赖并预留输出请求缓冲区。
 void UMassOutputSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
@@ -28,6 +31,7 @@ void UMassOutputSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	CompiledOutputs.Reserve(32);
 }
 
+// 清理输出注册表、请求队列和统计信息。
 void UMassOutputSubsystem::Deinitialize()
 {
 	PendingRequests.Reset();
@@ -41,11 +45,13 @@ void UMassOutputSubsystem::Deinitialize()
 	Super::Deinitialize();
 }
 
+// 判断当前 World 类型是否支持输出分发。
 bool UMassOutputSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) const
 {
 	return WorldType == EWorldType::Game || WorldType == EWorldType::PIE || WorldType == EWorldType::GamePreview;
 }
 
+// 根据对象所在 World 获取输出子系统。
 UMassOutputSubsystem* UMassOutputSubsystem::Get(const UObject* WorldContextObject)
 {
 	if (!GEngine || !WorldContextObject)
@@ -61,14 +67,25 @@ UMassOutputSubsystem* UMassOutputSubsystem::Get(const UObject* WorldContextObjec
 
 FMassOutputId UMassOutputSubsystem::RegisterOutput(const FMassOutputRegistration& Registration)
 {
+	// 注册输出描述，后续请求只携带 OutputId，避免热路径读取资产。
 	const bool bPayloadValid = Registration.Type == EMassAbilityOutputType::Effect
 		? Registration.EffectId.IsValid()
 		: FMath::IsFinite(Registration.Damage) && Registration.Damage > 0.0f;
 	if (!bPayloadValid || !FMath::IsFinite(Registration.MagnitudeScale)
-		|| Registration.MagnitudeScale <= 0.0f || CompiledOutputs.Num() >= Massbility::InvalidId)
+		|| Registration.MagnitudeScale <= 0.0f || Registration.SetByCallerCount > Massbility::MaxEffectSetByCallerValues
+		|| CompiledOutputs.Num() >= Massbility::InvalidId)
 	{
 		UE_LOG(LogMassbility, Error, TEXT("Rejected invalid Mass output registration."));
 		return {};
+	}
+	for (uint8 Index = 0; Index < Registration.SetByCallerCount; ++Index)
+	{
+		if (!Registration.SetByCallerValues[Index].DataTag.IsValid()
+			|| !FMath::IsFinite(Registration.SetByCallerValues[Index].Value))
+		{
+			UE_LOG(LogMassbility, Error, TEXT("Rejected Mass output with invalid SetByCaller value."));
+			return {};
+		}
 	}
 
 	FMassCompiledOutput Compiled;
@@ -79,12 +96,14 @@ FMassOutputId UMassOutputSubsystem::RegisterOutput(const FMassOutputRegistration
 	return Compiled.OutputId;
 }
 
+// 根据紧凑 OutputId 查找已经编译的输出描述。
 const FMassCompiledOutput* UMassOutputSubsystem::FindOutput(const FMassOutputId OutputId) const
 {
 	return OutputId.IsValid() && CompiledOutputs.IsValidIndex(OutputId.Value)
 		? &CompiledOutputs[OutputId.Value] : nullptr;
 }
 
+// 检查指定输出是否能通过外部目标语义路由。
 bool UMassOutputSubsystem::CanRouteExternalOutput(const FMassOutputId OutputId) const
 {
 	const FMassCompiledOutput* Output = FindOutput(OutputId);
@@ -92,6 +111,7 @@ bool UMassOutputSubsystem::CanRouteExternalOutput(const FMassOutputId OutputId) 
 		&& ExternalTargetSubsystem->CanRouteExternalOutput(Output->SemanticTag);
 }
 
+// 校验并提交单个输出请求。
 bool UMassOutputSubsystem::QueueOutput(const FMassOutputRequest& Request)
 {
 	return QueueOutputs(MakeArrayView(&Request, 1));
@@ -99,6 +119,7 @@ bool UMassOutputSubsystem::QueueOutput(const FMassOutputRequest& Request)
 
 bool UMassOutputSubsystem::QueueOutputs(const TConstArrayView<FMassOutputRequest> Requests)
 {
+	// 批量校验全部请求后再提交，避免多输出能力只成功一部分。
 	if (!IsInGameThread())
 	{
 		RecordFailure(EMassOutputFailure::WrongThread);
@@ -146,6 +167,7 @@ bool UMassOutputSubsystem::QueueOutputs(const TConstArrayView<FMassOutputRequest
 
 void UMassOutputSubsystem::FlushRequests(FMassEntityManager& EntityManager, const uint32 CurrentTick)
 {
+	// 按输出类型分发到 Combat、Effect 或 ExternalTarget 子系统。
 	for (const FMassOutputRequest& Request : PendingRequests)
 	{
 		const EMassOutputFailure Failure = Dispatch(EntityManager, Request, CurrentTick);
@@ -242,6 +264,8 @@ EMassOutputFailure UMassOutputSubsystem::Dispatch(FMassEntityManager& EntityMana
 		ExternalRequest.Target = External->Handle;
 		ExternalRequest.OutputId = Request.OutputId;
 		ExternalRequest.MagnitudeScale = Request.MagnitudeScale;
+		ExternalRequest.SetByCallerCount = Output->SetByCallerCount;
+		ExternalRequest.SetByCallerValues = Output->SetByCallerValues;
 		ExternalRequest.Origin = Request.Origin;
 		ExternalRequest.Direction = Request.Direction.GetSafeNormal();
 		ExternalRequest.SimulationTick = Request.SimulationTick != 0 ? Request.SimulationTick : CurrentTick;
@@ -255,11 +279,25 @@ EMassOutputFailure UMassOutputSubsystem::Dispatch(FMassEntityManager& EntityMana
 
 	const float FinalScale = Output->MagnitudeScale * Request.MagnitudeScale;
 	const FMassEntityHandle ResolvedSource = bSourceValid ? Request.Source : FMassEntityHandle();
-	const bool bAccepted = Output->Type == EMassAbilityOutputType::Effect
-		? EffectSubsystem && EffectSubsystem->QueueRegisteredEffect(
-			Request.Target, Output->EffectId, ResolvedSource, FinalScale)
-		: CombatSubsystem && CombatSubsystem->QueueDamage(Request.Target, Output->Damage * FinalScale,
+	bool bAccepted = false;
+	if (Output->Type == EMassAbilityOutputType::Effect)
+	{
+		FMassEffectSpec Spec;
+		Spec.Target = Request.Target;
+		Spec.Source = ResolvedSource;
+		Spec.EffectId = Output->EffectId;
+		Spec.MagnitudeScale = FinalScale;
+		for (uint8 Index = 0; Index < Output->SetByCallerCount; ++Index)
+		{
+			Spec.SetSetByCallerMagnitude(Output->SetByCallerValues[Index].DataTag, Output->SetByCallerValues[Index].Value);
+		}
+		bAccepted = EffectSubsystem && EffectSubsystem->QueueEffectSpec(Spec);
+	}
+	else
+	{
+		bAccepted = CombatSubsystem && CombatSubsystem->QueueDamage(Request.Target, Output->Damage * FinalScale,
 			ResolvedSource, Output->EffectId, Request.Origin, Request.Direction);
+	}
 	if (!bAccepted)
 	{
 		return EMassOutputFailure::DownstreamRejected;
@@ -268,6 +306,7 @@ EMassOutputFailure UMassOutputSubsystem::Dispatch(FMassEntityManager& EntityMana
 	return EMassOutputFailure::None;
 }
 
+// 记录输出处理失败原因，供调试和运行统计使用。
 void UMassOutputSubsystem::RecordFailure(const EMassOutputFailure Failure)
 {
 	const uint8 Index = static_cast<uint8>(Failure);

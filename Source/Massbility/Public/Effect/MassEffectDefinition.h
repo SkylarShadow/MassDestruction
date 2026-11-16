@@ -21,6 +21,7 @@ public:
 	EMassEffectStackPolicy GetStackPolicy() const { return StackPolicy; }
 	uint8 GetStackLimit() const { return StackLimit; }
 	const FGameplayTagContainer& GetGrantedTags() const { return GrantedTags; }
+	const FGameplayTagContainer& GetBlockedAbilityTags() const { return BlockedAbilityTags; }
 	const TArray<FMassEffectModifierDefinition>& GetModifiers() const { return Modifiers; }
 
 	bool Validate(FString& OutError) const;
@@ -47,6 +48,10 @@ private:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Massbility|Effect", meta = (AllowPrivateAccess = "true"))
 	FGameplayTagContainer GrantedTags;
+
+	/** Active 期间阻止目标激活具有这些 AbilityTags 的 Mass Ability。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Massbility|Effect", meta = (AllowPrivateAccess = "true"))
+	FGameplayTagContainer BlockedAbilityTags;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Massbility|Effect", meta = (AllowPrivateAccess = "true"))
 	TArray<FMassEffectModifierDefinition> Modifiers;

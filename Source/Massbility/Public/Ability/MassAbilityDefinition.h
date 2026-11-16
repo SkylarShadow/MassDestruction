@@ -14,6 +14,7 @@ class MASSBILITY_API UMassAbilityDefinition : public UPrimaryDataAsset
 
 public:
 	FGameplayTag GetAbilityTag() const { return AbilityTag; }
+	const FGameplayTagContainer& GetAbilityTags() const { return AbilityTags; }
 	float GetCooldownSeconds() const { return CooldownSeconds; }
 	const FGameplayTagContainer& GetRequiredOwnerTags() const { return RequiredOwnerTags; }
 	const FGameplayTagContainer& GetBlockedOwnerTags() const { return BlockedOwnerTags; }
@@ -28,6 +29,10 @@ public:
 private:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Massbility|Ability", meta = (AllowPrivateAccess = "true"))
 	FGameplayTag AbilityTag;
+
+	/** 能力类别。Effect 可通过 BlockedAbilityTags 阻止匹配的能力。AbilityTag 本身也会自动加入该集合。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Massbility|Ability|Tags", meta = (AllowPrivateAccess = "true"))
+	FGameplayTagContainer AbilityTags;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Massbility|Ability", meta = (ClampMin = "0.0", Units = "s", AllowPrivateAccess = "true"))
 	float CooldownSeconds = 1.0f;

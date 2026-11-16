@@ -1,5 +1,7 @@
 // Copyright MassDestruction. All Rights Reserved.
 
+// 外部目标子系统用 Proxy Entity 连接 Mass 与外部 Actor/ASC。
+
 #include "External/MassExternalTargetSubsystem.h"
 
 #include "Core/MassRuntimeSubsystem.h"
@@ -7,10 +9,12 @@
 #include "Entity/MassFragments.h"
 #include "External/MassExternalTargetFragments.h"
 #include "Mass/EntityFragments.h"
+#include "Targeting/MassUnitHitShapeFragment.h"
 #include "MassEntityManager.h"
 #include "MassEntitySubsystem.h"
 #include "MassEntityView.h"
 
+// 初始化实体和运行时依赖，并预留目标及外部输出队列容量。
 void UMassExternalTargetSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
@@ -21,6 +25,7 @@ void UMassExternalTargetSubsystem::Initialize(FSubsystemCollectionBase& Collecti
 	PendingOutputRequests.Reserve(64);
 }
 
+// 清理目标记录和输出队列；代理实体由 EntitySubsystem 生命周期统一回收。
 void UMassExternalTargetSubsystem::Deinitialize()
 {
 	// UMassEntitySubsystem may already have released its FMassEntityManager when
@@ -40,11 +45,13 @@ void UMassExternalTargetSubsystem::Deinitialize()
 	Super::Deinitialize();
 }
 
+// 判断当前 World 类型是否允许创建外部目标代理。
 bool UMassExternalTargetSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) const
 {
 	return WorldType == EWorldType::Game || WorldType == EWorldType::PIE || WorldType == EWorldType::GamePreview;
 }
 
+// 从 WorldContextObject 获取所属 World 的外部目标子系统。
 UMassExternalTargetSubsystem* UMassExternalTargetSubsystem::Get(const UObject* WorldContextObject)
 {
 	if (!GEngine || !WorldContextObject)
@@ -61,6 +68,7 @@ UMassExternalTargetSubsystem* UMassExternalTargetSubsystem::Get(const UObject* W
 bool UMassExternalTargetSubsystem::RegisterExternalTarget(const FMassExternalTargetSnapshot& Snapshot,
 	FMassExternalTargetHandle& OutHandle, FMassEntityHandle& OutProxyEntity)
 {
+	// 创建只保存快照的 Proxy Entity；真实外部对象生命周期由调用方负责。
 	// 代理只拥有快照和带代数校验的句柄；真实 Actor/ASC 的生命周期仍由外部运行时负责。
 	OutHandle.Reset();
 	OutProxyEntity = {};
@@ -124,6 +132,7 @@ bool UMassExternalTargetSubsystem::RegisterExternalTarget(const FMassExternalTar
 bool UMassExternalTargetSubsystem::UpdateExternalTarget(const FMassExternalTargetHandle Handle,
 	const FMassExternalTargetSnapshot& Snapshot)
 {
+	// 将外部对象最新的队伍、位置、可选中状态和 Tag 同步到代理实体。
 	if (!EntitySubsystem || !MassSubsystem || !IsHandleRecordValid(Handle))
 	{
 		return false;
@@ -151,6 +160,12 @@ bool UMassExternalTargetSubsystem::UpdateExternalTarget(const FMassExternalTarge
 	State->BaseTags = Snapshot.RuntimeTags;
 	State->EffectTags.Reset();
 	Transform->SetTransform(Snapshot.Transform);
+	if (FMassUnitHitShapeFragment* HitShape = EntityManager.GetFragmentDataPtr<FMassUnitHitShapeFragment>(ProxyEntity))
+	{
+		HitShape->Radius = FMath::Max(0.0f, Snapshot.HitRadius);
+		HitShape->HalfHeight = FMath::Max(HitShape->Radius, Snapshot.HitHalfHeight);
+		HitShape->bEnabled = Snapshot.HitRadius > 0.0f;
+	}
 	MassSubsystem->RebuildRuntimeTags(ProxyEntity);
 	++Stats.SnapshotUpdates;
 	return true;
@@ -158,6 +173,7 @@ bool UMassExternalTargetSubsystem::UpdateExternalTarget(const FMassExternalTarge
 
 bool UMassExternalTargetSubsystem::UnregisterExternalTarget(const FMassExternalTargetHandle Handle)
 {
+	// 销毁代理实体并递增 Serial，使所有旧句柄立即失效。
 	if (!EntitySubsystem || !IsHandleRecordValid(Handle))
 	{
 		return false;
@@ -184,12 +200,14 @@ bool UMassExternalTargetSubsystem::UnregisterExternalTarget(const FMassExternalT
 	return true;
 }
 
+// 校验句柄代数和代理实体，确认外部目标仍可参与战斗。
 bool UMassExternalTargetSubsystem::IsExternalTargetValid(const FMassExternalTargetHandle Handle) const
 {
 	return IsHandleRecordValid(Handle) && EntitySubsystem
 		&& EntitySubsystem->GetEntityManager().IsEntityValid(TargetRecords[Handle.Index].ProxyEntity);
 }
 
+// 将外部目标句柄解析为对应的 Mass 代理实体。
 bool UMassExternalTargetSubsystem::ResolveProxyEntity(const FMassExternalTargetHandle Handle,
 	FMassEntityHandle& OutProxyEntity) const
 {
@@ -202,6 +220,7 @@ bool UMassExternalTargetSubsystem::ResolveProxyEntity(const FMassExternalTargetH
 	return true;
 }
 
+// 从 Mass 代理实体反向解析外部目标句柄。
 bool UMassExternalTargetSubsystem::ResolveExternalTarget(const FMassEntityHandle ProxyEntity,
 	FMassExternalTargetHandle& OutHandle) const
 {
@@ -220,6 +239,7 @@ bool UMassExternalTargetSubsystem::ResolveExternalTarget(const FMassEntityHandle
 	return true;
 }
 
+// 为一个语义 Tag 注册外部输出路由，并增加引用计数。
 bool UMassExternalTargetSubsystem::RegisterExternalOutputRoute(const FGameplayTag SemanticTag)
 {
 	if (!SemanticTag.IsValid())
@@ -235,6 +255,7 @@ bool UMassExternalTargetSubsystem::RegisterExternalOutputRoute(const FGameplayTa
 	return true;
 }
 
+// 取消一个外部输出路由；引用归零后移除路由。
 bool UMassExternalTargetSubsystem::UnregisterExternalOutputRoute(const FGameplayTag SemanticTag)
 {
 	uint16* RefCount = OutputRouteRefCounts.Find(SemanticTag);
@@ -253,6 +274,7 @@ bool UMassExternalTargetSubsystem::UnregisterExternalOutputRoute(const FGameplay
 	return true;
 }
 
+// 判断当前是否存在可处理指定语义输出的外部路由。
 bool UMassExternalTargetSubsystem::CanRouteExternalOutput(const FGameplayTag SemanticTag) const
 {
 	const uint16* RefCount = OutputRouteRefCounts.Find(SemanticTag);
@@ -262,6 +284,7 @@ bool UMassExternalTargetSubsystem::CanRouteExternalOutput(const FGameplayTag Sem
 bool UMassExternalTargetSubsystem::QueueExternalOutput(const FMassExternalOutputRequest& Request,
 	const FGameplayTag SemanticTag)
 {
+	// 只有目标有效且存在语义路由时，跨运行时输出才允许入队。
 	// 入队时完成路由校验，避免无效目标或未映射的语义输出进入跨运行时队列。
 	if (!IsExternalTargetValid(Request.Target))
 	{
@@ -283,6 +306,7 @@ bool UMassExternalTargetSubsystem::QueueExternalOutput(const FMassExternalOutput
 	return true;
 }
 
+// 将等待中的外部输出转移给桥接层，并清空内部队列。
 void UMassExternalTargetSubsystem::ConsumeExternalOutputRequests(
 	TArray<FMassExternalOutputRequest>& OutRequests)
 {
@@ -292,6 +316,7 @@ void UMassExternalTargetSubsystem::ConsumeExternalOutputRequests(
 
 FMassArchetypeHandle UMassExternalTargetSubsystem::GetOrCreateProxyArchetype()
 {
+	// 延迟创建并复用外部目标代理所需的固定 Fragment 组合。
 	if (!EntitySubsystem)
 	{
 		return {};
@@ -302,6 +327,7 @@ FMassArchetypeHandle UMassExternalTargetSubsystem::GetOrCreateProxyArchetype()
 			FMassUnitFragment::StaticStruct(),
 			FMassStateFragment::StaticStruct(),
 			FMassExternalTargetFragment::StaticStruct(),
+			FMassUnitHitShapeFragment::StaticStruct(),
 			FTransformFragment::StaticStruct(),
 		};
 		ProxyArchetype = EntitySubsystem->GetMutableEntityManager().CreateArchetype(Fragments);
@@ -309,6 +335,7 @@ FMassArchetypeHandle UMassExternalTargetSubsystem::GetOrCreateProxyArchetype()
 	return ProxyArchetype;
 }
 
+// 校验句柄索引、分配状态和 Serial，防止旧句柄访问复用记录。
 bool UMassExternalTargetSubsystem::IsHandleRecordValid(const FMassExternalTargetHandle Handle) const
 {
 	return Handle.IsSet() && TargetRecords.IsValidIndex(static_cast<int32>(Handle.Index))

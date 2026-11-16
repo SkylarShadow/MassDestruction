@@ -21,9 +21,8 @@ protected:
 	virtual void Execute(FMassEntityManager& EntityManager, FMassExecutionContext& Context) override;
 
 private:
-	// 空间快照不需要每个模拟 Tick 重建，按目标刷新周期错峰复用。
+	// 命中快照每个模拟 Tick 重建；目标选择仍由 TargetFragment 错峰控制。
 	FMassEntityQuery SourceQuery;
-	uint32 LastBuildTick = MAX_uint32;
 };
 
 UCLASS()

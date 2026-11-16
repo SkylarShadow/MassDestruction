@@ -3,6 +3,7 @@
 #include "Core/MassGASSubsystem.h"
 
 #include "AbilitySystemComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "Combat/MassCombatSubsystem.h"
 #include "Context/MassGASGameplayEffectContext.h"
 #include "Core/MassGASBridgeActor.h"
@@ -162,6 +163,12 @@ UAbilitySystemComponent* UMassGASSubsystem::ResolveAbilitySystem(
 	return Index != INDEX_NONE ? Endpoints[Index].AbilitySystem.Get() : nullptr;
 }
 
+FMassEntityHandle UMassGASSubsystem::ResolveProxyEntity(const UAbilitySystemComponent* AbilitySystem) const
+{
+	const int32 Index = FindEndpointIndex(AbilitySystem);
+	return Index != INDEX_NONE ? Endpoints[Index].ProxyEntity : FMassEntityHandle{};
+}
+
 bool UMassGASSubsystem::CompileMappings()
 {
 	// 在世界初始化时编译一次。运行时 Processor 只使用整数和映射查找，
@@ -262,6 +269,15 @@ bool UMassGASSubsystem::BuildSnapshot(const FEndpoint& Endpoint,
 	}
 	OutSnapshot = {};
 	OutSnapshot.Transform = Avatar->GetActorTransform();
+	if (const UCapsuleComponent* Capsule = Avatar->FindComponentByClass<UCapsuleComponent>())
+	{
+		if (Capsule->IsQueryCollisionEnabled())
+		{
+			OutSnapshot.Transform.SetLocation(Capsule->GetComponentLocation());
+			OutSnapshot.HitRadius = Capsule->GetScaledCapsuleRadius();
+			OutSnapshot.HitHalfHeight = Capsule->GetScaledCapsuleHalfHeight();
+		}
+	}
 	OutSnapshot.TeamId = Endpoint.TeamId;
 	OutSnapshot.bTargetable = Endpoint.bTargetable;
 	FGameplayTagContainer OwnedTags;
@@ -365,7 +381,20 @@ bool UMassGASSubsystem::ApplyOutboundRequest(const FMassExternalOutputRequest& R
 	SpecHandle.Data->AddDynamicAssetTag(Output->SemanticTag);
 	if (Mapping.MagnitudeSetByCallerTag.IsValid())
 	{
-		SpecHandle.Data->SetSetByCallerMagnitude(Mapping.MagnitudeSetByCallerTag, MassContext->RawMagnitude);
+		float SetByCallerMagnitude = MassContext->RawMagnitude;
+		if (Mapping.SourceMassSetByCallerTag.IsValid())
+		{
+			for (uint8 Index = 0; Index < Request.SetByCallerCount; ++Index)
+			{
+				const FMassEffectSetByCallerValue& Value = Request.SetByCallerValues[Index];
+				if (Value.DataTag == Mapping.SourceMassSetByCallerTag)
+				{
+					SetByCallerMagnitude = Value.Value * FinalScale;
+					break;
+				}
+			}
+		}
+		SpecHandle.Data->SetSetByCallerMagnitude(Mapping.MagnitudeSetByCallerTag, SetByCallerMagnitude);
 	}
 	SourceAbilitySystem->ApplyGameplayEffectSpecToTarget(*SpecHandle.Data.Get(), TargetAbilitySystem);
 	++Stats.OutboundSpecsApplied;
@@ -477,8 +506,20 @@ bool UMassGASSubsystem::ApplyGameplayEffectSpecToMassTarget(const FGameplayEffec
 		}
 		return false;
 	}
-	if (InboundEffectIds.IsValidIndex(*MappingIndex)
-		&& EffectSubsystem->QueueRegisteredEffect(Target, InboundEffectIds[*MappingIndex], Source, Magnitude))
+	FMassEffectSpec MassSpec;
+	MassSpec.Target = Target;
+	MassSpec.Source = Source;
+	MassSpec.EffectId = InboundEffectIds.IsValidIndex(*MappingIndex) ? InboundEffectIds[*MappingIndex] : FMassEffectId();
+	if (Mapping.TargetMassSetByCallerTag.IsValid())
+	{
+		MassSpec.SetSetByCallerMagnitude(Mapping.TargetMassSetByCallerTag, Magnitude);
+	}
+	else
+	{
+		// 为已有 Mapping 保持兼容：未配置目标参数名时仍把 GAS 数值当作通用倍率。
+		MassSpec.MagnitudeScale = Magnitude;
+	}
+	if (MassSpec.EffectId.IsValid() && EffectSubsystem->QueueEffectSpec(MassSpec))
 	{
 		++Stats.InboundAppliedAsEffect;
 		return true;

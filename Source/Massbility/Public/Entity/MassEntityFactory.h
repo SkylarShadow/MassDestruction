@@ -12,5 +12,5 @@ class UMassUnitDefinition;
 struct MASSBILITY_API FMassEntityFactory
 {
 	static FMassEntityHandle Create(UMassRuntimeSubsystem& Subsystem, const UMassUnitDefinition& UnitDefinition,
-		const FTransform& Transform, int16 TeamIdOverride = INDEX_NONE);
+		const FTransform& Transform, int16 TeamIdOverride = INDEX_NONE, bool bGrantAbilities = true);
 };

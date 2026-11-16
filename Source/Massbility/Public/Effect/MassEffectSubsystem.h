@@ -41,6 +41,8 @@ public:
 	/** 以 Definition 形式提交效果；未注册时会先完成注册。 */
 	bool QueueEffect(FMassEntityHandle Target, const UMassEffectDefinition& Definition,
 		FMassEntityHandle Source = {}, float MagnitudeScale = 1.0f);
+	/** 提交包含固定容量 SetByCaller 参数的完整 Effect Spec。 */
+	bool QueueEffectSpec(const FMassEffectSpec& Spec);
 	/** 使用已注册 EffectId 提交效果请求，适合热路径调用。 */
 	bool QueueRegisteredEffect(FMassEntityHandle Target, FMassEffectId EffectId,
 		FMassEntityHandle Source = {}, float MagnitudeScale = 1.0f);
@@ -68,7 +70,7 @@ private:
 	void FlushRemovalRequests(FMassEntityManager& EntityManager, FMassExecutionContext& Context);
 	/** 校验目标并按叠加策略应用一个效果请求。 */
 	bool ApplyRequest(FMassEntityManager& EntityManager, FMassExecutionContext& Context,
-		const FMassEffectRequest& Request, uint32 CurrentTick);
+		const FMassEffectSpec& Spec, uint32 CurrentTick);
 	/** 按 EffectId 或 All 模式移除目标上的活动效果，并执行反向 Modifier。 */
 	bool RemoveMatchingEffects(FMassEntityManager& EntityManager, FMassExecutionContext& Context,
 		const FMassEffectRemovalRequest& Request);
@@ -77,11 +79,13 @@ private:
 		const FMassUnitFragment& Unit, FMassVitalFragment& Vitals,
 		FMassAttributeFragment& Attributes, FMassStateFragment& State, FMassCombatFragment& Combat,
 		FMassActiveEffectFragment& ActiveEffects);
-	/** 从所有活动 Effect Slot 汇总 GrantedTags，重建 State.EffectTags 和 RuntimeTags。 */
+	/** 从所有活动 Effect Slot 汇总 GrantedTags 与 BlockedAbilityTags。 */
 	void RebuildEffectTags(FMassStateFragment& State, const FMassActiveEffectFragment& ActiveEffects) const;
 	/** 按 Modifier Timing 应用属性变更；Ongoing 的移除通过负倍率完成。 */
 	bool ApplyModifiers(const FMassCompiledEffect& Effect, EMassModifierTiming Timing,
-		float Scale, const FMassUnitFragment& Unit, FMassVitalFragment& Vitals,
+		float ConstantScale, float SetByCallerScale, uint8 SetByCallerValueMask,
+		const TStaticArray<float, Massbility::MaxEffectSetByCallerValues>& SetByCallerValues,
+		const FMassUnitFragment& Unit, FMassVitalFragment& Vitals,
 		FMassAttributeFragment& Attributes) const;
 
 	UPROPERTY(Transient)
@@ -107,7 +111,7 @@ private:
 	/** 已解析 Attribute Handle 的效果变体，供热路径直接使用。 */
 	TArray<FMassCompiledEffect> CompiledVariants;
 	/** 等待当前效果 Processor 消费的应用请求。 */
-	TArray<FMassEffectRequest> PendingRequests;
+	TArray<FMassEffectSpec> PendingRequests;
 	/** 等待当前效果 Processor 消费的移除请求。 */
 	TArray<FMassEffectRemovalRequest> PendingRemovalRequests;
 };

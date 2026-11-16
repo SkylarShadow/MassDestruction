@@ -1,5 +1,4 @@
 // Copyright MassDestruction. All Rights Reserved.
-
 #include "Ability/MassAbilityProcessor.h"
 
 #include "Ability/MassAbilitySubsystem.h"
@@ -11,6 +10,7 @@
 UMassAbilityProcessor::UMassAbilityProcessor()
 	: AbilityQuery(*this)
 {
+	// 配置处理阶段和执行顺序：目标更新完成后才能使用 CurrentTarget。
 	bAutoRegisterWithProcessingPhases = true;
 	bRequiresGameThreadExecution = true;
 	ExecutionFlags = static_cast<int32>(EProcessorExecutionFlags::AllNetModes);
@@ -18,11 +18,13 @@ UMassAbilityProcessor::UMassAbilityProcessor()
 	ExecutionOrder.ExecuteAfter.Add(FName(TEXT("Massbility.Targeting")));
 }
 
+// 返回是否允许 Mass 根据查询结果裁剪本处理器的执行范围。
 bool UMassAbilityProcessor::ShouldAllowQueryBasedPruning(const bool bRuntimeMode) const
 {
 	return false;
 }
 
+// 配置自动能力执行所需的 Fragment 和 Entity Tag 查询条件。
 void UMassAbilityProcessor::ConfigureQueries(const TSharedRef<FMassEntityManager>& EntityManager)
 {
 	AbilityQuery.AddRequirement<FMassAbilityFragment>(EMassFragmentAccess::ReadWrite);
@@ -33,8 +35,10 @@ void UMassAbilityProcessor::ConfigureQueries(const TSharedRef<FMassEntityManager
 	AbilityQuery.AddTagRequirement<FMassHasAbilitiesTag>(EMassFragmentPresence::All);
 }
 
+// 消费主动能力请求，并为每个实体尝试一次自动能力。
 void UMassAbilityProcessor::Execute(FMassEntityManager& EntityManager, FMassExecutionContext& Context)
 {
+	// 同一 Tick 先处理显式请求，再执行每个实体的自动能力。
 	UWorld* World = Context.GetWorld();
 	UMassAbilitySubsystem* AbilitySubsystem = World ? World->GetSubsystem<UMassAbilitySubsystem>() : nullptr;
 	UMassRuntimeSubsystem* CoreSubsystem = World ? World->GetSubsystem<UMassRuntimeSubsystem>() : nullptr;
@@ -49,6 +53,7 @@ void UMassAbilityProcessor::Execute(FMassEntityManager& EntityManager, FMassExec
 		return;
 	}
 	LastAutomaticTick = CurrentTick;
+	// 自动能力按 Loadout 槽位顺序尝试；同一实体本 Tick 成功一次即停止。
 
 	AbilityQuery.ForEachEntityChunk(Context, [AbilitySubsystem, &EntityManager, CurrentTick](FMassExecutionContext& ChunkContext)
 	{
