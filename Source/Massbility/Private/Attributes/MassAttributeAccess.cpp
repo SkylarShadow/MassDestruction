@@ -6,7 +6,8 @@
 #include "Core/MassRuntimeSubsystem.h"
 #include "Entity/MassFragments.h"
 #include "MassEntityManager.h"
-//检查 Tag 是否对应 Vital 属性 如果不是，在已编译 Schema 的扩展属性中查找,最后输出 Storage + Index
+
+//把AttributeTag 解析为 {Storage, Index}，
 bool FMassAttributeAccess::ResolveHandle(const UMassRuntimeSubsystem& Subsystem, const UMassAttributeSchema& Schema,
 	const FGameplayTag AttributeTag, FMassAttributeHandle& OutHandle)
 {
@@ -19,6 +20,7 @@ bool FMassAttributeAccess::ResolveHandle(const UMassRuntimeSubsystem& Subsystem,
 	{
 		if (Subsystem.VitalAttributeTags[Index] == AttributeTag)
 		{
+		    //{Storage, Index}
 			OutHandle.Storage = EMassAttributeStorage::Vital;
 			OutHandle.Index = Index;
 			return true;
@@ -43,6 +45,7 @@ bool FMassAttributeAccess::ResolveHandle(const UMassRuntimeSubsystem& Subsystem,
 	return false;
 }
 
+// 读取解析好的属性
 bool FMassAttributeAccess::Get(const UMassRuntimeSubsystem& Subsystem, const FMassEntityManager& EntityManager,
 	const FMassEntityHandle Entity, const FMassAttributeHandle Handle, float& OutValue)
 {
@@ -75,6 +78,7 @@ bool FMassAttributeAccess::Get(const UMassRuntimeSubsystem& Subsystem, const FMa
 	return true;
 }
 
+//写入属性，同时保证属性合法
 bool FMassAttributeAccess::SetClamped(const UMassRuntimeSubsystem& Subsystem, FMassEntityManager& EntityManager,
 	const FMassEntityHandle Entity, const FMassAttributeHandle Handle, const float Value)
 {
@@ -116,6 +120,7 @@ bool FMassAttributeAccess::SetClamped(const UMassRuntimeSubsystem& Subsystem, FM
 	return true;
 }
 
+//在当前值上加增量
 bool FMassAttributeAccess::Add(const UMassRuntimeSubsystem& Subsystem, FMassEntityManager& EntityManager,
 	const FMassEntityHandle Entity, const FMassAttributeHandle Handle, const float Delta)
 {
@@ -124,6 +129,7 @@ bool FMassAttributeAccess::Add(const UMassRuntimeSubsystem& Subsystem, FMassEnti
 		&& SetClamped(Subsystem, EntityManager, Entity, Handle, Value + Delta);
 }
 
+// 同Add( 主要用于Mass Effect
 bool FMassAttributeAccess::AddResolved(const FMassCompiledAttributeSchema& Schema, FMassVitalFragment& Vitals,
 	FMassAttributeFragment& Attributes, const FMassAttributeHandle Handle, const float Delta)
 {

@@ -1,7 +1,5 @@
 // Copyright MassDestruction. All Rights Reserved.
 
-// Runtime 子系统管理实体创建、属性访问、状态和运行时 Tag。
-
 #include "Core/MassRuntimeSubsystem.h"
 
 #include "Core/MassRuntimeSettings.h"
@@ -17,7 +15,6 @@
 #include "Movement/MassForcedMovementFragments.h"
 #include "Targeting/MassUnitHitShapeFragment.h"
 
-// 初始化 Mass Entity、运行时 Tag、Schema 和其他能力系统依赖。
 void UMassRuntimeSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
@@ -36,7 +33,6 @@ void UMassRuntimeSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	SpatialCellSize = Settings ? FMath::Max(50.0f, Settings->SpatialCellSize) : 400.0f;
 }
 
-// 清理运行时注册表、缓存和实体管理依赖。
 void UMassRuntimeSubsystem::Deinitialize()
 {
 	UnitArchetype = {};
@@ -53,13 +49,12 @@ void UMassRuntimeSubsystem::Deinitialize()
 	Super::Deinitialize();
 }
 
-// 判断当前 World 是否支持运行时实体系统。
+
 bool UMassRuntimeSubsystem::DoesSupportWorldType(EWorldType::Type WorldType) const
 {
 	return WorldType == EWorldType::Game || WorldType == EWorldType::PIE || WorldType == EWorldType::GamePreview;
 }
 
-// 从上下文对象取得其所属 World 的 Runtime Subsystem。
 UMassRuntimeSubsystem* UMassRuntimeSubsystem::Get(const UObject* WorldContextObject)
 {
 	if (!GEngine || !WorldContextObject)

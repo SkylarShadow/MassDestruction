@@ -1,7 +1,5 @@
 // Copyright MassDestruction. All Rights Reserved.
 
-// 战斗子系统集中处理伤害请求、死亡候选和死亡事件。
-
 #include "Combat/MassCombatSubsystem.h"
 
 #include "Combat/MassCombatFragments.h"
@@ -15,7 +13,6 @@
 #include "MassExecutionContext.h"
 #include "Movement/MassForcedMovementFragments.h"
 
-// 初始化战斗依赖、伤害请求和死亡事件缓冲区。
 void UMassCombatSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
@@ -26,7 +23,6 @@ void UMassCombatSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	DeathEvents.Reserve(64);
 }
 
-// 清空战斗请求、死亡事件和统计数据。
 void UMassCombatSubsystem::Deinitialize()
 {
 	DeathEvents.Reset();
@@ -38,13 +34,11 @@ void UMassCombatSubsystem::Deinitialize()
 	Super::Deinitialize();
 }
 
-// 判断当前 World 是否支持战斗处理。
 bool UMassCombatSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) const
 {
 	return WorldType == EWorldType::Game || WorldType == EWorldType::PIE || WorldType == EWorldType::GamePreview;
 }
 
-// 根据上下文对象取得对应 World 的战斗子系统。
 UMassCombatSubsystem* UMassCombatSubsystem::Get(const UObject* WorldContextObject)
 {
 	if (!GEngine || !WorldContextObject)
@@ -58,6 +52,7 @@ UMassCombatSubsystem* UMassCombatSubsystem::Get(const UObject* WorldContextObjec
 	return nullptr;
 }
 
+//从外部提交基础伤害
 bool UMassCombatSubsystem::QueueDamage(const FMassEntityHandle Target, const float Damage,
 	const FMassEntityHandle Source, const FMassEffectId EffectId, const FVector Origin, const FVector Direction)
 {
@@ -81,13 +76,13 @@ void UMassCombatSubsystem::ConsumeDeathEvents(TArray<FMassDeathEvent>& OutEvents
 	OutEvents.Append(DeathEvents);
 }
 
-// 复制当前 Tick 的死亡事件，不改变内部队列。
+// 复制当前 Tick 的死亡事件
 void UMassCombatSubsystem::CopyDeathEventsForCurrentTick(TArray<FMassDeathEvent>& OutEvents) const
 {
 	OutEvents.Append(DeathEvents);
 }
 
-// 开始新的死亡事件 Tick，清理上一 Tick 的临时事件。
+// 开始新的死亡事件 Tick，清理上一 Tick 的临时事件
 void UMassCombatSubsystem::BeginDeathEventTick(const uint32 CurrentTick)
 {
 	if (DeathEventsTick != CurrentTick)
@@ -105,6 +100,7 @@ void UMassCombatSubsystem::RecordAppliedDamage(const FMassEntityHandle Target, F
 	{
 		return;
 	}
+    //伤害记录
 	Combat.LastDamageSource = Source;
 	Combat.LastDamageEffect = EffectId;
 	Combat.LastDamageTick = CurrentTick;
@@ -114,9 +110,9 @@ void UMassCombatSubsystem::RecordAppliedDamage(const FMassEntityHandle Target, F
 	}
 }
 
+//消费PendingDamageRequests，伤害结算
 void UMassCombatSubsystem::FlushDamageRequests(FMassEntityManager& EntityManager, const uint32 CurrentTick)
 {
-	// 批量消费伤害请求，统一完成目标校验、属性修改和死亡候选记录。
 	for (const FMassDamageRequest& Request : PendingDamageRequests)
 	{
 		if (!EntityManager.IsEntityValid(Request.Target))
@@ -137,7 +133,7 @@ void UMassCombatSubsystem::FlushDamageRequests(FMassEntityManager& EntityManager
 	}
 	PendingDamageRequests.Reset();
 }
-
+//死亡确认
 void UMassCombatSubsystem::ResolveDeathCandidates(FMassEntityManager& EntityManager, FMassExecutionContext& Context, const uint32 CurrentTick)
 {
 	// 将本 Tick 被判定为死亡的实体转换为一次性死亡事件。

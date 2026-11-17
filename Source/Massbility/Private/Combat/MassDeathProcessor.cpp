@@ -60,8 +60,8 @@ void UMassDeathProcessor::Execute(FMassEntityManager& EntityManager, FMassExecut
 			{
 				continue;
 			}
-			States[It].StateFlags &= ~EMassStateFlags::Dying;
-			States[It].StateFlags |= EMassStateFlags::Dead;
+			States[It].StateFlags &= ~EMassStateFlags::Dying;//去掉 Dying
+			States[It].StateFlags |= EMassStateFlags::Dead; //加上 Dead 标记
 			FMassTagMask StateMask;
 			CoreSubsystem->BuildStateMask(States[It].StateFlags, StateMask);
 			States[It].RuntimeTags = States[It].BaseTags;
