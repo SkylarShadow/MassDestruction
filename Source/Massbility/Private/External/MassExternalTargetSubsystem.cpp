@@ -1,6 +1,5 @@
 // Copyright MassDestruction. All Rights Reserved.
 
-// 外部目标子系统用 Proxy Entity 连接 Mass 与外部 Actor/ASC。
 
 #include "External/MassExternalTargetSubsystem.h"
 

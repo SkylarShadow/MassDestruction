@@ -1,6 +1,5 @@
 // Copyright MassDestruction. All Rights Reserved.
 
-// Output 子系统负责输出注册、校验、排队和按类型分发。
 
 #include "Output/MassOutputSubsystem.h"
 
@@ -103,7 +102,6 @@ const FMassCompiledOutput* UMassOutputSubsystem::FindOutput(const FMassOutputId 
 		? &CompiledOutputs[OutputId.Value] : nullptr;
 }
 
-// 检查指定输出是否能通过外部目标语义路由。
 bool UMassOutputSubsystem::CanRouteExternalOutput(const FMassOutputId OutputId) const
 {
 	const FMassCompiledOutput* Output = FindOutput(OutputId);

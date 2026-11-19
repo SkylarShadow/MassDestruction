@@ -95,7 +95,6 @@ FMassEntityHandle UMassRuntimeSubsystem::CreateUnitWithoutAbilities(
 
 bool UMassRuntimeSubsystem::DestroyUnit(const FMassEntityHandle Entity)
 {
-	// 销毁前确认实体有效，避免向 MassEntityManager 提交非法句柄。
 	if (!EntitySubsystem)
 	{
 		return false;
@@ -109,7 +108,6 @@ bool UMassRuntimeSubsystem::DestroyUnit(const FMassEntityHandle Entity)
 	return true;
 }
 
-// 先查固定 Vital 字段，再查 Unit Definition 对应 Schema 中的 Extended 字段。
 // 在属性 Schema 中按 Tag 查找属性句柄。
 bool UMassRuntimeSubsystem::ResolveAttributeHandle(const UMassAttributeSchema& Schema, const FGameplayTag AttributeTag, FMassAttributeHandle& OutHandle) const
 {
@@ -169,38 +167,7 @@ bool UMassRuntimeSubsystem::AddAttribute(const FMassEntityHandle Entity, const F
 	return EntitySubsystem && FMassAttributeAccess::Add(*this, EntitySubsystem->GetMutableEntityManager(), Entity, Handle, Delta);
 }
 
-bool UMassRuntimeSubsystem::GetExtendedAttribute(const FMassEntityHandle Entity, const FMassAttributeHandle Handle, float& OutValue) const
-{
-	OutValue = 0.0f;
-	if (!EntitySubsystem || !Handle.IsValid() || Handle.Storage != EMassAttributeStorage::Extended)
-	{
-		return false;
-	}
-	const FMassEntityManager& EntityManager = EntitySubsystem->GetEntityManager();
-	if (!EntityManager.IsEntityValid(Entity))
-	{
-		return false;
-	}
-	const FMassAttributeFragment* Attributes = EntityManager.GetFragmentDataPtr<FMassAttributeFragment>(Entity);
-	if (!Attributes || Handle.Index >= Attributes->AttributeCount)
-	{
-		return false;
-	}
-	OutValue = Attributes->Values[Handle.Index];
-	return true;
-}
-
-bool UMassRuntimeSubsystem::SetExtendedAttribute(const FMassEntityHandle Entity, const FMassAttributeHandle Handle, const float Value)
-{
-	return Handle.Storage == EMassAttributeStorage::Extended && SetAttribute(Entity, Handle, Value);
-}
-
-bool UMassRuntimeSubsystem::AddExtendedAttribute(const FMassEntityHandle Entity, const FMassAttributeHandle Handle, const float Delta)
-{
-	return Handle.Storage == EMassAttributeStorage::Extended && AddAttribute(Entity, Handle, Delta);
-}
-
-// 设置实体状态标志，并同步影响状态 Tag 的运行时数据。
+// 设置实体状态标志(Dead AbilityBlocked 之类)，并同步影响状态 Tag 的运行时数据
 bool UMassRuntimeSubsystem::SetStateFlags(const FMassEntityHandle Entity, const EMassStateFlags NewFlags)
 {
 	if (!EntitySubsystem)
@@ -222,7 +189,7 @@ bool UMassRuntimeSubsystem::SetStateFlags(const FMassEntityHandle Entity, const 
 	{
 		return false;
 	}
-	// RuntimeTags 是派生缓存，任何状态变化都必须同步重建，避免查询读到旧状态。
+	// RuntimeTags 是派生缓存，任何状态变化都必须同步重建，避免查询读到旧状态
 	State->StateFlags = NewFlags;
 	State->RuntimeTags = State->BaseTags;
 	State->RuntimeTags.Append(StateMask);
@@ -233,7 +200,6 @@ bool UMassRuntimeSubsystem::SetStateFlags(const FMassEntityHandle Entity, const 
 // 将基础 Tag、Effect Tag 和状态 Tag 合并成 RuntimeTags。
 bool UMassRuntimeSubsystem::RebuildRuntimeTags(const FMassEntityHandle Entity)
 {
-	// 根据基础 Tag、状态 Tag 和 Effect Tag 重建热路径使用的 RuntimeTags。
 	if (!EntitySubsystem)
 	{
 		return false;
@@ -259,7 +225,7 @@ const FMassCompiledAttributeSchema* UMassRuntimeSubsystem::FindCompiledSchema(co
 	return CompiledSchemas.IsValidIndex(SchemaId) ? &CompiledSchemas[SchemaId] : nullptr;
 }
 
-// 判断实体是否满足必需 Tag 且不包含阻塞 Tag。
+// 判断实体是否满足必需 Tag 且不包含阻塞 Tag
 bool UMassRuntimeSubsystem::HasRuntimeTags(const FMassEntityHandle Entity, const FMassTagMask& Required, const FMassTagMask& Blocked) const
 {
 	if (!EntitySubsystem)
@@ -271,7 +237,7 @@ bool UMassRuntimeSubsystem::HasRuntimeTags(const FMassEntityHandle Entity, const
 	return State && State->RuntimeTags.ContainsAll(Required) && !State->RuntimeTags.ContainsAny(Blocked);
 }
 
-// 编译运行时设置并建立全局 Tag、状态和属性索引。
+// 编译运行时设置并建立全局 Tag、状态和属性索引
 bool UMassRuntimeSubsystem::CompileSettings()
 {
 	const UMassRuntimeSettings* Settings = GetDefault<UMassRuntimeSettings>();

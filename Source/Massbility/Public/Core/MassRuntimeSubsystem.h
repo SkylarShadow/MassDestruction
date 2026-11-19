@@ -49,10 +49,6 @@ public:
 	bool GetAttribute(FMassEntityHandle Entity, FMassAttributeHandle Handle, float& OutValue) const;
 	bool SetAttribute(FMassEntityHandle Entity, FMassAttributeHandle Handle, float Value);
 	bool AddAttribute(FMassEntityHandle Entity, FMassAttributeHandle Handle, float Delta);
-	/** 仅操作 Extended Attribute，防止 Vital 句柄被误用。 */
-	bool GetExtendedAttribute(FMassEntityHandle Entity, FMassAttributeHandle Handle, float& OutValue) const;
-	bool SetExtendedAttribute(FMassEntityHandle Entity, FMassAttributeHandle Handle, float Value);
-	bool AddExtendedAttribute(FMassEntityHandle Entity, FMassAttributeHandle Handle, float Delta);
 	/** 设置状态位，并立即重建 Runtime Tag 缓存。 */
 	bool SetStateFlags(FMassEntityHandle Entity, EMassStateFlags NewFlags);
 	bool HasRuntimeTags(FMassEntityHandle Entity, const FMassTagMask& Required, const FMassTagMask& Blocked = {}) const;

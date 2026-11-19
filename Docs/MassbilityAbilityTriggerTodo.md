@@ -20,6 +20,19 @@
 
 ## TODO
 
+### [P1] 轻量 Ability 生命周期（前摇、命中窗口、结束与取消）
+
+- [ ] 将当前瞬时 `TryActivate` 路径拆分为 `CanActivate`、`BeginAbility`、`ExecuteImpact`、`EndAbility` 与 `CancelAbility`；所有路径仍复用同一套状态、冷却、Tag、目标和范围校验。
+- [ ] 为实体增加固定容量的 Active Ability 运行时状态：槽位、目标 Handle、`InstanceId`、阶段、`ImpactTick`、`NextPeriodTick`、`EndTick`；普通单位默认同时只允许一个活动技能。
+- [ ] 在 Definition / 编译数据中支持前摇、命中窗口、后摇、持续时间、周期，以及“冷却在 Begin 或命中后提交”的明确语义；瞬时能力保持零额外状态的现有快路径。
+- [ ] 新增仅查询 Active Ability Tag 的 Execution Processor；它在命中 Tick 投递单体 Output，在周期 Tick 投递持续 Output，到 EndTick 统一收尾。非活动单位不得进入该查询。
+- [ ] 定义取消策略：死亡、`AbilityBlocked`、眩晕类 Effect、目标丢失（可配置）应调用 `CancelAbility`，清理临时 Runtime Tag 与表现关联，且不得遗留活动状态。
+- [ ] 范围技能只在 ImpactTick / PeriodTick 执行空间查询，并限制候选或命中数量；不得每 Tick 为全部单位扫描邻居。
+- [ ] 为英雄 / External Proxy 提供可选动画事件桥接：`Entity + InstanceId + EventTag` 仅可推进匹配的活动技能；普通 Mass 单位仍以模拟 Tick 决定伤害，动画只跟随表现。
+- [ ] 覆盖测试：前摇后单体命中、目标丢失取消、死亡取消、周期伤害、同 Tick 动画事件去重、旧 `InstanceId` 事件被拒绝、瞬时能力保持原有行为。
+
+**风险：中到高。** 生命周期状态必须保持固定容量、无 UObject / Timer 实例，并由模拟 Tick 驱动；动画通知不能成为大量 Mass 单位伤害结算的唯一时钟。范围查询和事件链须有容量、最大命中数及可观测性预算。
+
 ### [P1] 自动与显式触发解耦的最小开关
 
 - [ ] 当出现“已有 `CurrentTarget`，但只能由玩家、AI 指令或 GAS 事件触发”的实际能力时，为 `UMassAbilityDefinition` 增加 `bAllowAutomaticActivation`，默认 `true`。

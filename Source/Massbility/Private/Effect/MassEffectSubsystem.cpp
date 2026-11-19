@@ -21,14 +21,17 @@ namespace
 {
 	uint32 MakeVariantKey(const uint16 EffectId, const uint16 SchemaId)
 	{
+	    //拼接
 		return (static_cast<uint32>(EffectId) << 16) | SchemaId;
 	}
-
+    
+    //根据 SetByCaller 参数数量生成 bit mask
 	uint8 MakeSetByCallerMask(const uint8 Count)
 	{
 		return Count >= 8 ? MAX_uint8 : static_cast<uint8>((1u << Count) - 1u);
 	}
-
+    
+    //把本次 Spec 传来的动态数值，整理到固定数组
 	bool BuildSetByCallerValues(const FMassCompiledEffectTemplate& Template, const FMassEffectSpec& Spec,
 		TStaticArray<float, Massbility::MaxEffectSetByCallerValues>& OutValues)
 	{
@@ -107,9 +110,9 @@ UMassEffectSubsystem* UMassEffectSubsystem::Get(const UObject* WorldContextObjec
 	return nullptr;
 }
 
+//把一个 Effect DataAsset 注册并编译成 EffectId
 FMassEffectId UMassEffectSubsystem::RegisterEffect(const UMassEffectDefinition& Definition)
 {
-	// 编译并缓存 Effect Definition，返回热路径使用的紧凑 ID。
 	if (const uint16* Existing = EffectIds.Find(&Definition))
 	{
 		return {*Existing};
@@ -223,6 +226,7 @@ bool UMassEffectSubsystem::FindEffectIdByTag(const FGameplayTag EffectTag,
 	return false;
 }
 
+//Effect Definition 的通用部分编译成 Template
 bool UMassEffectSubsystem::CompileTemplate(const UMassEffectDefinition& Definition, FMassCompiledEffectTemplate& OutTemplate)
 {
 	FString Error;
@@ -280,6 +284,7 @@ bool UMassEffectSubsystem::CompileTemplate(const UMassEffectDefinition& Definiti
 	return true;
 }
 
+//根据 EffectId + SchemaId 添加/创建 RuntimeEffect
 const FMassCompiledEffect* UMassEffectSubsystem::GetOrCreateVariant(const FMassEffectId EffectId, const uint16 SchemaId)
 {
 	// 为属性 Schema 创建或取得 Effect 的运行时变体。
@@ -373,6 +378,7 @@ void UMassEffectSubsystem::FlushRemovalRequests(FMassEntityManager& EntityManage
 	PendingRemovalRequests.Reset();
 }
 
+//把一个外部提交的 FMassEffectSpec，转化为对实体属性、生命值、活动 Effect 槽位以及运行时 Tag 的实际修改
 bool UMassEffectSubsystem::ApplyRequest(FMassEntityManager& EntityManager, FMassExecutionContext& Context,
 	const FMassEffectSpec& Spec, const uint32 CurrentTick)
 {
@@ -613,7 +619,7 @@ void UMassEffectSubsystem::TickEntity(const FMassEntityHandle Entity, FMassExecu
 
 void UMassEffectSubsystem::RebuildEffectTags(FMassStateFragment& State, const FMassActiveEffectFragment& ActiveEffects) const
 {
-	// 根据当前存活 Effect 重新计算阻塞能力和运行时效果 Tag。
+	// 根据当前存活 Effect 重新计算阻塞能力和运行时效果 Tag
 	State.EffectTags.Reset();
 	State.EffectBlockedAbilityTags.Reset();
 	for (const FMassActiveEffectSlot& Slot : ActiveEffects.Slots)

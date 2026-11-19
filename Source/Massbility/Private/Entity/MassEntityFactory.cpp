@@ -15,6 +15,8 @@
 #include "Mass/EntityFragments.h"
 #include "Targeting/MassUnitHitShapeFragment.h"
 
+
+//根据一个 UMassUnitDefinition，创建并初始化一个完整的 Mass Entity
 FMassEntityHandle FMassEntityFactory::Create(UMassRuntimeSubsystem& Subsystem,
 	const UMassUnitDefinition& UnitDefinition, const FTransform& Transform, const int16 TeamIdOverride,
 	const bool bGrantAbilities)
