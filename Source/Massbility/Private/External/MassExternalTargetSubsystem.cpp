@@ -153,7 +153,7 @@ bool UMassExternalTargetSubsystem::UpdateExternalTarget(const FMassExternalTarge
 	}
 
 	Unit->UnitDefinitionId = Massbility::InvalidId;
-	Unit->AttributeSchemaId = Massbility::InvalidId;
+	Unit->AttributeLayoutId = Massbility::InvalidId;
 	Unit->TeamId = Snapshot.TeamId;
 	State->StateFlags = Snapshot.bTargetable ? EMassStateFlags::Targetable : EMassStateFlags::None;
 	State->BaseTags = Snapshot.RuntimeTags;

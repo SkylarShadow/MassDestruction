@@ -7,7 +7,7 @@
 #include "Engine/DataAsset.h"
 #include "GameplayTagContainer.h"
 
-#include "MassAttributeSchema.generated.h"
+#include "MassAttributeSet.generated.h"
 
 //单个属性定义
 USTRUCT(BlueprintType)
@@ -37,9 +37,9 @@ struct MASSBILITY_API FMassCompiledAttribute
 	float MaxValue = FLT_MAX;
 };
 
-struct MASSBILITY_API FMassCompiledAttributeSchema
+struct MASSBILITY_API FMassCompiledAttributeLayout
 {
-	uint16 SchemaId = Massbility::InvalidId; //World Subsystem 内注册后的 Schema ID
+	uint16 LayoutId = Massbility::InvalidId; // World Subsystem 内注册后的布局 ID
 	uint8 AttributeCount = 0; //实际使用了多少扩展属性槽
 	TStaticArray<FMassCompiledAttribute, Massbility::MaxExtendedAttributes> Attributes; //编译后的固定长度属性定义
 };
@@ -58,25 +58,9 @@ private:
 	TArray<FMassAttributeDefinition> Attributes;
 };
 
-/**
- * Editor-authored composition of reusable attribute sets. It is compiled once
- * into a fixed runtime slot layout when first registered by the world subsystem.
- */
-UCLASS(BlueprintType)
-class MASSBILITY_API UMassAttributeSchema : public UPrimaryDataAsset
+/** Flatten an ordered set list into a reusable runtime layout. */
+struct MASSBILITY_API FMassAttributeLayoutCompiler
 {
-	GENERATED_BODY()
-
-public:
-	const TArray<TObjectPtr<UMassAttributeSet>>& GetAttributeSets() const { return AttributeSets; }
-
-	/**
-	 * Flattens attribute sets in array order and validates invalid/duplicate tags,
-	 * invalid ranges, and the fixed extended-attribute capacity.
-	 */
-	bool Compile(FMassCompiledAttributeSchema& OutCompiledSchema, FString& OutError) const;
-
-private:
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Massbility|Attribute", meta = (AllowPrivateAccess = "true"))
-	TArray<TObjectPtr<UMassAttributeSet>> AttributeSets;
+	static bool Compile(const TArray<TObjectPtr<UMassAttributeSet>>& Sets,
+		FMassCompiledAttributeLayout& OutLayout, FString& OutError);
 };

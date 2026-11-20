@@ -3,7 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Attributes/MassAttributeSchema.h"
+#include "Attributes/MassAttributeSet.h"
 #include "Core/MassTypes.h"
 #include "Core/MassSimulationClock.h"
 #include "Mass/EntityHandle.h"
@@ -44,8 +44,8 @@ public:
 	bool DestroyUnit(FMassEntityHandle Entity);
 
 	/** 将作者配置的 GameplayTag 解析为固定 Vital 或 Extended 存储中的属性句柄。 */
-	bool ResolveAttributeHandle(const UMassAttributeSchema& Schema, FGameplayTag AttributeTag, FMassAttributeHandle& OutHandle) const;
-	bool ResolveAttributeHandle(uint16 SchemaId, FGameplayTag AttributeTag, FMassAttributeHandle& OutHandle) const;
+	bool ResolveAttributeHandle(const UMassUnitDefinition& UnitDefinition, FGameplayTag AttributeTag, FMassAttributeHandle& OutHandle) const;
+	bool ResolveAttributeHandle(uint16 LayoutId, FGameplayTag AttributeTag, FMassAttributeHandle& OutHandle) const;
 	bool GetAttribute(FMassEntityHandle Entity, FMassAttributeHandle Handle, float& OutValue) const;
 	bool SetAttribute(FMassEntityHandle Entity, FMassAttributeHandle Handle, float Value);
 	bool AddAttribute(FMassEntityHandle Entity, FMassAttributeHandle Handle, float Delta);
@@ -53,7 +53,7 @@ public:
 	bool SetStateFlags(FMassEntityHandle Entity, EMassStateFlags NewFlags);
 	bool HasRuntimeTags(FMassEntityHandle Entity, const FMassTagMask& Required, const FMassTagMask& Blocked = {}) const;
 	bool RebuildRuntimeTags(FMassEntityHandle Entity);
-	const FMassCompiledAttributeSchema* FindCompiledSchema(uint16 SchemaId) const;
+	const FMassCompiledAttributeLayout* FindCompiledLayout(uint16 LayoutId) const;
 	const FMassCompiledRuntimeTagCatalog& GetRuntimeTagCatalog() const { return RuntimeTagCatalog; }
 	const FMassSimulationClock& GetSimulationClock() const { return SimulationClock; }
 	uint32 GetTargetRefreshTicks() const { return TargetRefreshTicks; }
@@ -67,10 +67,10 @@ private:
 
 	/** 读取 DeveloperSettings，并将资产数据编译为运行时可直接查询的结构。 */
 	bool CompileSettings();
-	/** 注册并缓存 Attribute Schema，返回紧凑 SchemaId。 */
-	bool RegisterSchema(const UMassAttributeSchema& Schema, uint16& OutSchemaId);
-	/** 注册 Unit Definition 及其 Schema；实体热路径只保存 ID。 */
-	bool RegisterUnitDefinition(const UMassUnitDefinition& UnitDefinition, uint16& OutUnitDefinitionId, uint16& OutSchemaId);
+	/** 编译单位属性配置并复用相同的布局。 */
+	bool RegisterLayout(const UMassUnitDefinition& UnitDefinition, uint16& OutLayoutId, FMassCompiledAttributeLayout& OutUnitLayout);
+	/** 注册单位定义及其初始属性。 */
+	bool RegisterUnitDefinition(const UMassUnitDefinition& UnitDefinition, uint16& OutUnitDefinitionId, uint16& OutLayoutId);
 	/** 将组合 StateFlags 转换为对应 Runtime Tag Mask 的并集。 */
 	bool BuildStateMask(EMassStateFlags Flags, FMassTagMask& OutMask) const;
 	/** 延迟创建所有普通单位共享的 Fragment 布局。 */
@@ -87,9 +87,10 @@ private:
 
 	/** 资产编译后的紧凑 Tag 表，热路径只引用其中的 bit。 */
 	FMassCompiledRuntimeTagCatalog RuntimeTagCatalog;
-	/** Schema 资产到紧凑运行时 ID 的注册表。 */
-	TMap<const UMassAttributeSchema*, uint16> SchemaIds;
-	TArray<FMassCompiledAttributeSchema> CompiledSchemas;
+	/** 单位定义到共享属性布局的映射。 */
+	TMap<const UMassUnitDefinition*, uint16> LayoutIds;
+	TArray<FMassCompiledAttributeLayout> CompiledLayouts;
+	TArray<TStaticArray<float, Massbility::MaxExtendedAttributes>> InitialValuesByUnit;
 	TMap<const UMassUnitDefinition*, uint16> UnitDefinitionIds;
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UMassUnitDefinition>> UnitDefinitions;

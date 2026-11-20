@@ -19,10 +19,10 @@
 
 namespace
 {
-	uint32 MakeVariantKey(const uint16 EffectId, const uint16 SchemaId)
+	uint32 MakeVariantKey(const uint16 EffectId, const uint16 LayoutId)
 	{
 	    //拼接
-		return (static_cast<uint32>(EffectId) << 16) | SchemaId;
+		return (static_cast<uint32>(EffectId) << 16) | LayoutId;
 	}
     
     //根据 SetByCaller 参数数量生成 bit mask
@@ -141,10 +141,10 @@ FMassEffectId UMassEffectSubsystem::RegisterEffect(const UMassEffectDefinition& 
 	return {static_cast<uint16>(CompiledTemplates.Num() - 1)};
 }
 
-bool UMassEffectSubsystem::PrewarmEffectForSchema(const UMassEffectDefinition& Definition, const uint16 SchemaId)
+bool UMassEffectSubsystem::PrewarmEffectForLayout(const UMassEffectDefinition& Definition, const uint16 LayoutId)
 {
 	const FMassEffectId EffectId = RegisterEffect(Definition);
-	return EffectId.IsValid() && GetOrCreateVariant(EffectId, SchemaId) != nullptr;
+	return EffectId.IsValid() && GetOrCreateVariant(EffectId, LayoutId) != nullptr;
 }
 
 bool UMassEffectSubsystem::QueueEffect(const FMassEntityHandle Target, const UMassEffectDefinition& Definition,
@@ -284,15 +284,15 @@ bool UMassEffectSubsystem::CompileTemplate(const UMassEffectDefinition& Definiti
 	return true;
 }
 
-//根据 EffectId + SchemaId 添加/创建 RuntimeEffect
-const FMassCompiledEffect* UMassEffectSubsystem::GetOrCreateVariant(const FMassEffectId EffectId, const uint16 SchemaId)
+//根据 EffectId + LayoutId 添加/创建 RuntimeEffect
+const FMassCompiledEffect* UMassEffectSubsystem::GetOrCreateVariant(const FMassEffectId EffectId, const uint16 LayoutId)
 {
 	// 为属性 Schema 创建或取得 Effect 的运行时变体。
-	if (!MassSubsystem || !CompiledTemplates.IsValidIndex(EffectId.Value) || !MassSubsystem->FindCompiledSchema(SchemaId))
+	if (!MassSubsystem || !CompiledTemplates.IsValidIndex(EffectId.Value) || !MassSubsystem->FindCompiledLayout(LayoutId))
 	{
 		return nullptr;
 	}
-	const uint32 Key = MakeVariantKey(EffectId.Value, SchemaId);
+	const uint32 Key = MakeVariantKey(EffectId.Value, LayoutId);
 	if (const uint16* Existing = VariantIds.Find(Key))
 	{
 		return CompiledVariants.IsValidIndex(*Existing) ? &CompiledVariants[*Existing] : nullptr;
@@ -306,7 +306,7 @@ const FMassCompiledEffect* UMassEffectSubsystem::GetOrCreateVariant(const FMassE
 	FMassCompiledEffect Variant;
 	Variant.EffectId = EffectId;
 	Variant.VariantId = static_cast<uint16>(CompiledVariants.Num());
-	Variant.SchemaId = SchemaId;
+	Variant.LayoutId = LayoutId;
 	Variant.DurationPolicy = Template.DurationPolicy;
 	Variant.DurationTicks = Template.DurationTicks;
 	Variant.PeriodTicks = Template.PeriodTicks;
@@ -318,10 +318,10 @@ const FMassCompiledEffect* UMassEffectSubsystem::GetOrCreateVariant(const FMassE
 	for (const FMassEffectModifierDefinition& SourceModifier : Template.Modifiers)
 	{
 		FMassAttributeHandle Handle;
-		if (!MassSubsystem->ResolveAttributeHandle(SchemaId, SourceModifier.AttributeTag, Handle))
+		if (!MassSubsystem->ResolveAttributeHandle(LayoutId, SourceModifier.AttributeTag, Handle))
 		{
 			UE_LOG(LogMassbility, Error, TEXT("Effect '%s' references attribute '%s' missing from schema %u."),
-				*Template.EffectTag.ToString(), *SourceModifier.AttributeTag.ToString(), SchemaId);
+				*Template.EffectTag.ToString(), *SourceModifier.AttributeTag.ToString(), LayoutId);
 			return nullptr;
 		}
 		if (SourceModifier.Timing == EMassModifierTiming::Ongoing
@@ -397,7 +397,7 @@ bool UMassEffectSubsystem::ApplyRequest(FMassEntityManager& EntityManager, FMass
 	{
 		return false;
 	}
-	const FMassCompiledEffect* Effect = GetOrCreateVariant(Spec.EffectId, Unit->AttributeSchemaId);
+	const FMassCompiledEffect* Effect = GetOrCreateVariant(Spec.EffectId, Unit->AttributeLayoutId);
 	if (!Effect)
 	{
 		return false;
@@ -638,7 +638,7 @@ bool UMassEffectSubsystem::ApplyModifiers(const FMassCompiledEffect& Effect, con
 	const FMassUnitFragment& Unit, FMassVitalFragment& Vitals,
 	FMassAttributeFragment& Attributes) const
 {
-	const FMassCompiledAttributeSchema* Schema = MassSubsystem->FindCompiledSchema(Unit.AttributeSchemaId);
+	const FMassCompiledAttributeLayout* Schema = MassSubsystem->FindCompiledLayout(Unit.AttributeLayoutId);
 	if (!Schema)
 	{
 		return false;

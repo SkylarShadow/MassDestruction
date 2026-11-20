@@ -19,7 +19,7 @@ struct MASSBILITY_API FMassUnitFragment : public FMassFragment
 	GENERATED_BODY()
 
 	uint16 UnitDefinitionId = Massbility::InvalidId;
-	uint16 AttributeSchemaId = Massbility::InvalidId;
+	uint16 AttributeLayoutId = Massbility::InvalidId;
 	int16 TeamId = 0;
 };
 

@@ -39,9 +39,10 @@ void UMassRuntimeSubsystem::Deinitialize()
 	SimulationClock.Reset();
 	StateTagMasks.Reset();
 	UnitDefinitions.Reset();
+	InitialValuesByUnit.Reset();
 	UnitDefinitionIds.Reset();
-	CompiledSchemas.Reset();
-	SchemaIds.Reset();
+	CompiledLayouts.Reset();
+	LayoutIds.Reset();
 	RuntimeTagCatalog = {};
 	StateTagMappingAsset = nullptr;
 	RuntimeTagCatalogAsset = nullptr;
@@ -108,21 +109,21 @@ bool UMassRuntimeSubsystem::DestroyUnit(const FMassEntityHandle Entity)
 	return true;
 }
 
-// 在属性 Schema 中按 Tag 查找属性句柄。
-bool UMassRuntimeSubsystem::ResolveAttributeHandle(const UMassAttributeSchema& Schema, const FGameplayTag AttributeTag, FMassAttributeHandle& OutHandle) const
+// 按单位已注册的属性布局解析 Tag。
+bool UMassRuntimeSubsystem::ResolveAttributeHandle(const UMassUnitDefinition& UnitDefinition, const FGameplayTag AttributeTag, FMassAttributeHandle& OutHandle) const
 {
-	return FMassAttributeAccess::ResolveHandle(*this, Schema, AttributeTag, OutHandle);
+	return FMassAttributeAccess::ResolveHandle(*this, UnitDefinition, AttributeTag, OutHandle);
 }
 
-// 根据 SchemaId 查找 Schema 后解析属性句柄。
-bool UMassRuntimeSubsystem::ResolveAttributeHandle(const uint16 SchemaId, const FGameplayTag AttributeTag, FMassAttributeHandle& OutHandle) const
+// 根据 LayoutId 解析属性句柄。
+bool UMassRuntimeSubsystem::ResolveAttributeHandle(const uint16 LayoutId, const FGameplayTag AttributeTag, FMassAttributeHandle& OutHandle) const
 {
 	OutHandle = {};
 	if (!AttributeTag.IsValid())
 	{
 		return false;
 	}
-	// Vital 字段不属于某个独立 Schema，而是所有单位共享的固定存储。
+	// Vital 字段由所有单位共享，不占扩展属性槽位。
 	for (uint8 Index = 0; Index < VitalAttributeTags.Num(); ++Index)
 	{
 		if (VitalAttributeTags[Index].IsValid() && VitalAttributeTags[Index] == AttributeTag)
@@ -132,14 +133,14 @@ bool UMassRuntimeSubsystem::ResolveAttributeHandle(const uint16 SchemaId, const 
 			return true;
 		}
 	}
-	const FMassCompiledAttributeSchema* Schema = FindCompiledSchema(SchemaId);
-	if (!Schema)
+	const FMassCompiledAttributeLayout* Layout = FindCompiledLayout(LayoutId);
+	if (!Layout)
 	{
 		return false;
 	}
-	for (uint8 Index = 0; Index < Schema->AttributeCount; ++Index)
+	for (uint8 Index = 0; Index < Layout->AttributeCount; ++Index)
 	{
-		if (Schema->Attributes[Index].AttributeTag == AttributeTag)
+		if (Layout->Attributes[Index].AttributeTag == AttributeTag)
 		{
 			OutHandle.Storage = EMassAttributeStorage::Extended;
 			OutHandle.Index = Index;
@@ -219,10 +220,10 @@ bool UMassRuntimeSubsystem::RebuildRuntimeTags(const FMassEntityHandle Entity)
 	return true;
 }
 
-// 根据 SchemaId 查找编译后的属性 Schema。
-const FMassCompiledAttributeSchema* UMassRuntimeSubsystem::FindCompiledSchema(const uint16 SchemaId) const
+// 根据 LayoutId 查找编译后的属性布局。
+const FMassCompiledAttributeLayout* UMassRuntimeSubsystem::FindCompiledLayout(const uint16 LayoutId) const
 {
-	return CompiledSchemas.IsValidIndex(SchemaId) ? &CompiledSchemas[SchemaId] : nullptr;
+	return CompiledLayouts.IsValidIndex(LayoutId) ? &CompiledLayouts[LayoutId] : nullptr;
 }
 
 // 判断实体是否满足必需 Tag 且不包含阻塞 Tag
@@ -303,62 +304,83 @@ bool UMassRuntimeSubsystem::CompileSettings()
 	return true;
 }
 
-// 注册并缓存属性 Schema，返回运行时 SchemaId。
-bool UMassRuntimeSubsystem::RegisterSchema(const UMassAttributeSchema& Schema, uint16& OutSchemaId)
+// 编译单位属性配置，复用相同的布局；保留本单位的默认值用于初始化。
+bool UMassRuntimeSubsystem::RegisterLayout(const UMassUnitDefinition& UnitDefinition, uint16& OutLayoutId, FMassCompiledAttributeLayout& OutUnitLayout)
 {
-	if (const uint16* Existing = SchemaIds.Find(&Schema))
+	if (CompiledLayouts.Num() >= Massbility::InvalidId)
 	{
-		OutSchemaId = *Existing;
-		return true;
-	}
-	if (CompiledSchemas.Num() >= Massbility::InvalidId)
-	{
-		UE_LOG(LogMassbility, Error, TEXT("Mass schema registry exhausted."));
+		UE_LOG(LogMassbility, Error, TEXT("Mass attribute layout registry exhausted."));
 		return false;
 	}
 
-	// Schema 编译一次后缓存，避免热路径遍历 UObject 和作者数组。
-	FMassCompiledAttributeSchema Compiled;
 	FString Error;
-	if (!Schema.Compile(Compiled, Error))
+	if (!FMassAttributeLayoutCompiler::Compile(UnitDefinition.GetAttributeSets(), OutUnitLayout, Error))
 	{
-		UE_LOG(LogMassbility, Error, TEXT("Failed to compile attribute schema '%s': %s"), *Schema.GetPathName(), *Error);
+		UE_LOG(LogMassbility, Error, TEXT("Failed to compile attributes for '%s': %s"), *UnitDefinition.GetPathName(), *Error);
 		return false;
 	}
-	for (uint8 AttributeIndex = 0; AttributeIndex < Compiled.AttributeCount; ++AttributeIndex)
+	for (uint8 AttributeIndex = 0; AttributeIndex < OutUnitLayout.AttributeCount; ++AttributeIndex)
 	{
 		for (const FGameplayTag VitalTag : VitalAttributeTags)
 		{
-			if (VitalTag.IsValid() && Compiled.Attributes[AttributeIndex].AttributeTag == VitalTag)
+			if (VitalTag.IsValid() && OutUnitLayout.Attributes[AttributeIndex].AttributeTag == VitalTag)
 			{
-				UE_LOG(LogMassbility, Error, TEXT("Schema '%s' redeclares vital attribute '%s' as an extended attribute."),
-					*Schema.GetPathName(), *VitalTag.ToString());
+				UE_LOG(LogMassbility, Error, TEXT("Unit '%s' redeclares vital attribute '%s' as an extended attribute."),
+					*UnitDefinition.GetPathName(), *VitalTag.ToString());
 				return false;
 			}
 		}
 	}
-	OutSchemaId = static_cast<uint16>(CompiledSchemas.Num());
-	Compiled.SchemaId = OutSchemaId;
-	CompiledSchemas.Add(Compiled);
-	SchemaIds.Add(&Schema, OutSchemaId);
+	// Initial values are unit-specific and do not affect layout identity.
+	for (const FMassCompiledAttributeLayout& Existing : CompiledLayouts)
+	{
+		if (Existing.AttributeCount != OutUnitLayout.AttributeCount)
+		{
+			continue;
+		}
+		bool bMatches = true;
+		for (uint8 Index = 0; Index < OutUnitLayout.AttributeCount; ++Index)
+		{
+			const FMassCompiledAttribute& ExistingAttribute = Existing.Attributes[Index];
+			const FMassCompiledAttribute& UnitAttribute = OutUnitLayout.Attributes[Index];
+			if (ExistingAttribute.AttributeTag != UnitAttribute.AttributeTag
+				|| ExistingAttribute.MinValue != UnitAttribute.MinValue
+				|| ExistingAttribute.MaxValue != UnitAttribute.MaxValue)
+			{
+				bMatches = false;
+				break;
+			}
+		}
+		if (bMatches)
+		{
+			OutLayoutId = Existing.LayoutId;
+			LayoutIds.Add(&UnitDefinition, OutLayoutId);
+			return true;
+		}
+	}
+	OutLayoutId = static_cast<uint16>(CompiledLayouts.Num());
+	OutUnitLayout.LayoutId = OutLayoutId;
+	CompiledLayouts.Add(OutUnitLayout);
+	LayoutIds.Add(&UnitDefinition, OutLayoutId);
 	return true;
 }
 
-// 注册单位定义及其属性 Schema，返回实体初始化所需的紧凑 ID。
-bool UMassRuntimeSubsystem::RegisterUnitDefinition(const UMassUnitDefinition& UnitDefinition, uint16& OutUnitDefinitionId, uint16& OutSchemaId)
+// 注册单位定义并编译其初始属性。
+bool UMassRuntimeSubsystem::RegisterUnitDefinition(const UMassUnitDefinition& UnitDefinition, uint16& OutUnitDefinitionId, uint16& OutLayoutId)
 {
-	// 注册单位定义、属性 Schema 和能力 Loadout，建立运行时紧凑 ID。
 	if (const uint16* Existing = UnitDefinitionIds.Find(&UnitDefinition))
 	{
 		OutUnitDefinitionId = *Existing;
-		const UMassUnitDefinition* ExistingDefinition = UnitDefinitions[*Existing];
-		return ExistingDefinition && ExistingDefinition->GetAttributeSchema() && RegisterSchema(*ExistingDefinition->GetAttributeSchema(), OutSchemaId);
+		if (const uint16* ExistingLayout = LayoutIds.Find(&UnitDefinition))
+		{
+			OutLayoutId = *ExistingLayout;
+			return true;
+		}
+		return false;
 	}
-	// Unit Definition 必须先绑定 Schema，实体初始化阶段只携带紧凑 ID。
-	UMassAttributeSchema* Schema = UnitDefinition.GetAttributeSchema();
-	if (!Schema || !RegisterSchema(*Schema, OutSchemaId))
+	FMassCompiledAttributeLayout UnitLayout;
+	if (!RegisterLayout(UnitDefinition, OutLayoutId, UnitLayout))
 	{
-		UE_LOG(LogMassbility, Error, TEXT("Unit definition '%s' requires a valid attribute schema."), *UnitDefinition.GetPathName());
 		return false;
 	}
 	if (UnitDefinitions.Num() >= Massbility::InvalidId)
@@ -366,8 +388,34 @@ bool UMassRuntimeSubsystem::RegisterUnitDefinition(const UMassUnitDefinition& Un
 		UE_LOG(LogMassbility, Error, TEXT("Mass unit definition registry exhausted."));
 		return false;
 	}
+	TStaticArray<float, Massbility::MaxExtendedAttributes> InitialValues = {};
+	for (uint8 Index = 0; Index < UnitLayout.AttributeCount; ++Index)
+	{
+		InitialValues[Index] = UnitLayout.Attributes[Index].DefaultValue;
+	}
+	TSet<FGameplayTag> SeenOverrides;
+	for (const FMassAttributeInitialValue& Override : UnitDefinition.GetInitialAttributeValues())
+	{
+		if (!Override.AttributeTag.IsValid() || !FMath::IsFinite(Override.Value) || SeenOverrides.Contains(Override.AttributeTag))
+		{
+			UE_LOG(LogMassbility, Error, TEXT("Invalid or duplicate initial attribute in '%s'."), *UnitDefinition.GetPathName());
+			return false;
+		}
+		SeenOverrides.Add(Override.AttributeTag);
+		FMassAttributeHandle Handle;
+		if (!ResolveAttributeHandle(OutLayoutId, Override.AttributeTag, Handle)
+			|| Handle.Storage != EMassAttributeStorage::Extended)
+		{
+			UE_LOG(LogMassbility, Error, TEXT("Initial attribute '%s' is not extended in '%s'."),
+				*Override.AttributeTag.ToString(), *UnitDefinition.GetPathName());
+			return false;
+		}
+		const FMassCompiledAttribute& Attribute = UnitLayout.Attributes[Handle.Index];
+		InitialValues[Handle.Index] = FMath::Clamp(Override.Value, Attribute.MinValue, Attribute.MaxValue);
+	}
 	OutUnitDefinitionId = static_cast<uint16>(UnitDefinitions.Num());
 	UnitDefinitions.Add(const_cast<UMassUnitDefinition*>(&UnitDefinition));
+	InitialValuesByUnit.Add(InitialValues);
 	UnitDefinitionIds.Add(&UnitDefinition, OutUnitDefinitionId);
 	return true;
 }

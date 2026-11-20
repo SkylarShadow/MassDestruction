@@ -4,12 +4,24 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
+#include "Attributes/MassAttributeSet.h"
 #include "GameplayTagContainer.h"
 
 #include "MassUnitDefinition.generated.h"
 
-class UMassAttributeSchema;
 class UMassAbilityDefinition;
+
+USTRUCT(BlueprintType)
+struct FMassAttributeInitialValue
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
+	FGameplayTag AttributeTag;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
+	float Value = 0.0f;
+};
 
 /** 大规模实体的Data asset */
 UCLASS(BlueprintType)
@@ -18,7 +30,8 @@ class MASSBILITY_API UMassUnitDefinition : public UPrimaryDataAsset
 	GENERATED_BODY()
 
 public:
-	UMassAttributeSchema* GetAttributeSchema() const { return AttributeSchema; }
+	const TArray<TObjectPtr<UMassAttributeSet>>& GetAttributeSets() const { return AttributeSets; }
+	const TArray<FMassAttributeInitialValue>& GetInitialAttributeValues() const { return InitialAttributeValues; }
 	float GetInitialHealth() const { return InitialHealth; }
 	float GetInitialMaxHealth() const { return InitialMaxHealth; }
 	float GetInitialMoveSpeed() const { return InitialMoveSpeed; }
@@ -29,8 +42,11 @@ public:
 	const TArray<TObjectPtr<UMassAbilityDefinition>>& GetAbilities() const { return Abilities; }
 
 private:
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Massbility|Unit", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UMassAttributeSchema> AttributeSchema;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Massbility|Attributes", meta = (AllowPrivateAccess = "true"))
+	TArray<TObjectPtr<UMassAttributeSet>> AttributeSets;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Massbility|Attributes", meta = (AllowPrivateAccess = "true"))
+	TArray<FMassAttributeInitialValue> InitialAttributeValues;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Massbility|Unit", meta = (ClampMin = "0.0", AllowPrivateAccess = "true"))
 	float InitialHealth = 100.0f;

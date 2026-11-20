@@ -141,7 +141,7 @@ struct MASSBILITY_API FMassCompiledEffect
 	/** 同一效果模板在特定 Schema 下的编译变体 ID。 */
 	uint16 VariantId = Massbility::InvalidId;
 	/** 该 Variant 所使用的 Attribute Schema ID。 */
-	uint16 SchemaId = Massbility::InvalidId;
+	uint16 LayoutId = Massbility::InvalidId;
 	/** 决定该效果是即时、有限持续还是无限持续。 */
 	EMassEffectDurationPolicy DurationPolicy = EMassEffectDurationPolicy::Instant;
 	/** 持续时间和周期均使用固定 Simulation Tick，而不是浮点秒数。 */

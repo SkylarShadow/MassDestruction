@@ -7,17 +7,17 @@
 #include "GameplayTagContainer.h"
 #include "Mass/EntityHandle.h"
 
-class UMassAttributeSchema;
+class UMassUnitDefinition;
 class UMassRuntimeSubsystem;
 struct FMassEntityManager;
 struct FMassAttributeFragment;
-struct FMassCompiledAttributeSchema;
+struct FMassCompiledAttributeLayout;
 struct FMassVitalFragment;
 
 /** Centralized attribute resolution and clamped access for cold and hot paths. */
 struct MASSBILITY_API FMassAttributeAccess
 {
-	static bool ResolveHandle(const UMassRuntimeSubsystem& Subsystem, const UMassAttributeSchema& Schema,
+	static bool ResolveHandle(const UMassRuntimeSubsystem& Subsystem, const UMassUnitDefinition& UnitDefinition,
 		FGameplayTag AttributeTag, FMassAttributeHandle& OutHandle);
 
 	static bool Get(const UMassRuntimeSubsystem& Subsystem, const FMassEntityManager& EntityManager,
@@ -27,6 +27,6 @@ struct MASSBILITY_API FMassAttributeAccess
 	static bool Add(const UMassRuntimeSubsystem& Subsystem, FMassEntityManager& EntityManager,
 		FMassEntityHandle Entity, FMassAttributeHandle Handle, float Delta);
 
-	static bool AddResolved(const FMassCompiledAttributeSchema& Schema, FMassVitalFragment& Vitals,
+	static bool AddResolved(const FMassCompiledAttributeLayout& Schema, FMassVitalFragment& Vitals,
 		FMassAttributeFragment& Attributes, FMassAttributeHandle Handle, float Delta);
 };

@@ -2,13 +2,13 @@
 
 #include "Attributes/MassAttributeAccess.h"
 
-#include "Attributes/MassAttributeSchema.h"
+#include "Attributes/MassAttributeSet.h"
 #include "Core/MassRuntimeSubsystem.h"
 #include "Entity/MassFragments.h"
 #include "MassEntityManager.h"
 
 //把AttributeTag 解析为 {Storage, Index}，
-bool FMassAttributeAccess::ResolveHandle(const UMassRuntimeSubsystem& Subsystem, const UMassAttributeSchema& Schema,
+bool FMassAttributeAccess::ResolveHandle(const UMassRuntimeSubsystem& Subsystem, const UMassUnitDefinition& UnitDefinition,
 	const FGameplayTag AttributeTag, FMassAttributeHandle& OutHandle)
 {
 	OutHandle = {};
@@ -27,12 +27,12 @@ bool FMassAttributeAccess::ResolveHandle(const UMassRuntimeSubsystem& Subsystem,
 		}
 	}
 
-	const uint16* SchemaId = Subsystem.SchemaIds.Find(&Schema);
-	if (!SchemaId || !Subsystem.CompiledSchemas.IsValidIndex(*SchemaId))
+	const uint16* LayoutId = Subsystem.LayoutIds.Find(&UnitDefinition);
+	if (!LayoutId || !Subsystem.CompiledLayouts.IsValidIndex(*LayoutId))
 	{
 		return false;
 	}
-	const FMassCompiledAttributeSchema& Compiled = Subsystem.CompiledSchemas[*SchemaId];
+	const FMassCompiledAttributeLayout& Compiled = Subsystem.CompiledLayouts[*LayoutId];
 	for (uint8 Index = 0; Index < Compiled.AttributeCount; ++Index)
 	{
 		if (Compiled.Attributes[Index].AttributeTag == AttributeTag)
@@ -89,7 +89,7 @@ bool FMassAttributeAccess::SetClamped(const UMassRuntimeSubsystem& Subsystem, FM
 	FMassUnitFragment* Unit = EntityManager.GetFragmentDataPtr<FMassUnitFragment>(Entity);
 	FMassVitalFragment* Vitals = EntityManager.GetFragmentDataPtr<FMassVitalFragment>(Entity);
 	FMassAttributeFragment* Attributes = EntityManager.GetFragmentDataPtr<FMassAttributeFragment>(Entity);
-	if (!Unit || !Vitals || !Attributes || !Subsystem.CompiledSchemas.IsValidIndex(Unit->AttributeSchemaId))
+	if (!Unit || !Vitals || !Attributes || !Subsystem.CompiledLayouts.IsValidIndex(Unit->AttributeLayoutId))
 	{
 		return false;
 	}
@@ -111,11 +111,12 @@ bool FMassAttributeAccess::SetClamped(const UMassRuntimeSubsystem& Subsystem, FM
 			return false;
 		}
 	}
-	if (Handle.Storage != EMassAttributeStorage::Extended || Handle.Index >= Attributes->AttributeCount)
+	if (Handle.Storage != EMassAttributeStorage::Extended || Handle.Index >= Attributes->AttributeCount
+		|| Handle.Index >= Subsystem.CompiledLayouts[Unit->AttributeLayoutId].AttributeCount)
 	{
 		return false;
 	}
-	const FMassCompiledAttribute& Definition = Subsystem.CompiledSchemas[Unit->AttributeSchemaId].Attributes[Handle.Index];
+	const FMassCompiledAttribute& Definition = Subsystem.CompiledLayouts[Unit->AttributeLayoutId].Attributes[Handle.Index];
 	Attributes->Values[Handle.Index] = FMath::Clamp(Value, Definition.MinValue, Definition.MaxValue);
 	return true;
 }
@@ -130,7 +131,7 @@ bool FMassAttributeAccess::Add(const UMassRuntimeSubsystem& Subsystem, FMassEnti
 }
 
 // 同Add( 主要用于Mass Effect
-bool FMassAttributeAccess::AddResolved(const FMassCompiledAttributeSchema& Schema, FMassVitalFragment& Vitals,
+bool FMassAttributeAccess::AddResolved(const FMassCompiledAttributeLayout& Schema, FMassVitalFragment& Vitals,
 	FMassAttributeFragment& Attributes, const FMassAttributeHandle Handle, const float Delta)
 {
 	if (!Handle.IsValid() || !FMath::IsFinite(Delta))

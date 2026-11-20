@@ -37,7 +37,7 @@ public:
 	/** 编译并注册效果模板，返回可在请求和 Fragment 中保存的紧凑 EffectId。 */
 	FMassEffectId RegisterEffect(const UMassEffectDefinition& Definition);
 	/** 为指定 Attribute Schema 预先建立效果 Variant，避免首次应用时编译。 */
-	bool PrewarmEffectForSchema(const UMassEffectDefinition& Definition, uint16 SchemaId);
+	bool PrewarmEffectForLayout(const UMassEffectDefinition& Definition, uint16 LayoutId);
 	/** 以 Definition 形式提交效果；未注册时会先完成注册。 */
 	bool QueueEffect(FMassEntityHandle Target, const UMassEffectDefinition& Definition,
 		FMassEntityHandle Source = {}, float MagnitudeScale = 1.0f);
@@ -63,7 +63,7 @@ private:
 	/** 编译 Definition 的通用部分；属性 Tag 到 Handle 的解析留给 Variant 编译。 */
 	bool CompileTemplate(const UMassEffectDefinition& Definition, FMassCompiledEffectTemplate& OutTemplate);
 	/** 获取或创建某个 EffectId 在指定 Schema 下的热路径 Variant。 */
-	const FMassCompiledEffect* GetOrCreateVariant(FMassEffectId EffectId, uint16 SchemaId);
+	const FMassCompiledEffect* GetOrCreateVariant(FMassEffectId EffectId, uint16 LayoutId);
 	/** 在效果处理阶段批量转移本 Tick 收到的应用请求。 */
 	void FlushPendingRequests(FMassEntityManager& EntityManager, FMassExecutionContext& Context, uint32 CurrentTick);
 	/** 在效果处理阶段批量转移本 Tick 收到的移除请求。 */
@@ -106,7 +106,7 @@ private:
 	TMap<FGameplayTag, uint16> EffectTagIds;
 	/** 不依赖具体 Attribute Schema 的效果模板。 */
 	TArray<FMassCompiledEffectTemplate> CompiledTemplates;
-	/** (EffectId, SchemaId) 到 VariantId 的索引。 */
+	/** (EffectId, LayoutId) 到 VariantId 的索引。 */
 	TMap<uint32, uint16> VariantIds;
 	/** 已解析 Attribute Handle 的效果变体，供热路径直接使用。 */
 	TArray<FMassCompiledEffect> CompiledVariants;

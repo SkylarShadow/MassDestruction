@@ -23,8 +23,8 @@ FMassEntityHandle FMassEntityFactory::Create(UMassRuntimeSubsystem& Subsystem,
 {
 	// 先注册单位相关运行时数据，再创建实体并初始化所有基础 Fragment。
 	uint16 UnitDefinitionId = Massbility::InvalidId;
-	uint16 SchemaId = Massbility::InvalidId;
-	if (!Subsystem.RegisterUnitDefinition(UnitDefinition, UnitDefinitionId, SchemaId) || !Subsystem.EntitySubsystem)
+	uint16 LayoutId = Massbility::InvalidId;
+	if (!Subsystem.RegisterUnitDefinition(UnitDefinition, UnitDefinitionId, LayoutId) || !Subsystem.EntitySubsystem)
 	{
 		return {};
 	}
@@ -65,7 +65,7 @@ FMassEntityHandle FMassEntityFactory::Create(UMassRuntimeSubsystem& Subsystem,
 		// 将 Definition 的初始属性、状态、能力、目标刷新时间和碰撞形状复制到实体。
 		FMassUnitFragment& Unit = EntityView.GetFragmentData<FMassUnitFragment>();
 		Unit.UnitDefinitionId = UnitDefinitionId;
-		Unit.AttributeSchemaId = SchemaId;
+		Unit.AttributeLayoutId = LayoutId;
 		Unit.TeamId = TeamIdOverride != INDEX_NONE ? TeamIdOverride
 			: static_cast<int16>(FMath::Clamp(UnitDefinition.GetTeamId(), static_cast<int32>(MIN_int16), static_cast<int32>(MAX_int16)));
 
@@ -75,11 +75,10 @@ FMassEntityHandle FMassEntityFactory::Create(UMassRuntimeSubsystem& Subsystem,
 		Vitals.MoveSpeed = FMath::Max(0.0f, UnitDefinition.GetInitialMoveSpeed());
 
 		FMassAttributeFragment& Attributes = EntityView.GetFragmentData<FMassAttributeFragment>();
-		const FMassCompiledAttributeSchema& Schema = Subsystem.CompiledSchemas[SchemaId];
-		Attributes.AttributeCount = Schema.AttributeCount;
+		Attributes.AttributeCount = Subsystem.CompiledLayouts[LayoutId].AttributeCount;
 		for (int32 Index = 0; Index < Massbility::MaxExtendedAttributes; ++Index)
 		{
-			Attributes.Values[Index] = Index < Schema.AttributeCount ? Schema.Attributes[Index].DefaultValue : 0.0f;
+			Attributes.Values[Index] = Subsystem.InitialValuesByUnit[UnitDefinitionId][Index];
 		}
 
 		FMassStateFragment& State = EntityView.GetFragmentData<FMassStateFragment>();
